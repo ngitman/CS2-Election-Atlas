@@ -1,0 +1,6 @@
+<!-- Copy to Local.props (git-ignored) and point it at your game install. Only used when the modding toolchain is not installed. -->
+<Project>
+	<PropertyGroup>
+		<GameManagedPath>C:\Program Files (x86)\Steam\steamapps\common\Cities Skylines II\Cities2_Data\Managed</GameManagedPath>
+	</PropertyGroup>
+</Project>

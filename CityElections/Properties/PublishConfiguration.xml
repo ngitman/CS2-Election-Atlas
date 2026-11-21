@@ -1,0 +1,14 @@
+<Publish>
+	<!-- Filled in automatically after the first publish; needed to update an existing mod -->
+	<ModId Value="" />
+	<DisplayName Value="City Elections" />
+	<ShortDescription Value="Districts vote on a schedule you set, with turnout and votes driven by who lives there." />
+	<LongDescription>
+Once your city has a City Hall, it holds elections on a schedule you choose. Every district votes, and turnout and vote choice come from the citizens who actually live there: their age, education, wealth and job. A monthly poll tracks how residents feel about the governing party between elections.
+	</LongDescription>
+	<Thumbnail Value="Properties/Thumbnail.png" />
+	<Tag Value="Code Mod" />
+	<ModVersion Value="0.1.0" />
+	<GameVersion Value="1.6.*" />
+	<ChangeLog Value="Phase 1 scaffold: settings and an empty Elections panel." />
+</Publish>
