@@ -15,7 +15,7 @@ namespace ElectionAtlas
 
         public IEnumerable<KeyValuePair<string, string>> ReadEntries(IList<IDictionaryEntryError> errors, Dictionary<string, int> indexCounts)
         {
-            return new Dictionary<string, string>
+            var entries = new Dictionary<string, string>
             {
                 { m_Setting.GetSettingsLocaleID(), "Election Atlas" },
                 { m_Setting.GetOptionTabLocaleID(Setting.kSection), "Main" },
@@ -44,6 +44,14 @@ namespace ElectionAtlas
                 { m_Setting.GetEnumValueLocaleID(TurnoutPreset.UkGeneral), "UK general (~67%)" },
                 { m_Setting.GetEnumValueLocaleID(TurnoutPreset.Nordic), "Nordic (~80%)" },
             };
+
+#if DEBUG
+            entries[m_Setting.GetOptionGroupLocaleID(Setting.kDebugGroup)] = "Debug (development builds only)";
+            entries[m_Setting.GetOptionLabelLocaleID(nameof(Setting.SaveProbe))] = "Save probe (spike 3)";
+            entries[m_Setting.GetOptionDescLocaleID(nameof(Setting.SaveProbe))] =
+                "Tests whether the game saves data from a mod's own system. Takes effect after a restart. Use only on a copy of a city: the save may not load once the probe is gone.";
+#endif
+            return entries;
         }
 
         public void Unload()

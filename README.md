@@ -29,6 +29,7 @@ ElectionAtlas/                  the mod (net48), references Game.dll
   Mod.cs                        entry point (IMod)
   Setting.cs, LocaleEN.cs       options menu + English strings
   Systems/ElectionsUISystem.cs  C# <-> UI bindings (group "electionAtlas")
+  Diagnostics/                  spike logger and save probe (Debug builds only)
   Properties/PublishConfiguration.xml   Paradox Mods metadata
   UI/                           TypeScript/React UI module, built with webpack to ElectionAtlas.mjs
 ElectionAtlas.Model/            netstandard2.0, no game references: the election model
@@ -37,7 +38,15 @@ ElectionAtlas.Model.Tests/      xUnit, net8.0
 
 ## Prerequisites
 
-1. **Modding toolchain:** in the game, open Options > Modding and install the toolchain. It sets the `CSII_*` user environment variables used by the build. Restart your terminal or IDE afterwards.
+1. **Modding toolchain**, installed from inside the game:
+    1. Start Cities: Skylines II and, from the main menu, open **Options → Modding**.
+    2. The toolchain section lists its dependencies, each with a status. Install every one that isn't installed yet and wait for the downloads to finish.
+    3. Restart your terminal or IDE (or sign out and back in) so the new `CSII_*` user environment variables are picked up.
+    4. Check it worked; this should print a folder path:
+
+       ```powershell
+       [Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'User')
+       ```
 2. .NET SDK 8+ and Node 20+.
 
 ## Build
@@ -76,6 +85,42 @@ With `CSII_USERDATAPATH` set (by the toolchain), the bundle goes to `<user data>
 - [ ] The mod loads with no errors: `%USERPROFILE%\AppData\LocalLow\Colossal Order\Cities Skylines II\Logs\ElectionAtlas.Mod.log` shows "ElectionAtlas loaded".
 - [ ] Options > Election Atlas shows the Schedule and Rules settings, and they persist after a restart.
 - [ ] The top-left toolbar button opens and closes the Elections panel, and the panel's close button works.
+
+## Running the spikes (Debug builds)
+
+Debug builds include a diagnostics system that answers the open questions about the game in one play session. It writes everything to `ElectionAtlas.Spikes.log` and is compiled out of Release builds.
+
+1. With the toolchain installed, build in Debug (the default) and build the UI:
+
+   ```powershell
+   dotnet build ElectionAtlas.sln
+   ```
+
+   ```powershell
+   cd ElectionAtlas\UI; npm run build
+   ```
+2. Start the game and load a mid-size city, ideally one with a City Hall and a few districts.
+3. Let it run at full speed for at least one in-game year. A full report is written at load and every 6 in-game months.
+4. Send back `%USERPROFILE%\AppData\LocalLow\Colossal Order\Cities Skylines II\Logs\ElectionAtlas.Spikes.log` and `ElectionAtlas.Mod.log` from the same folder.
+
+| Log tag | What it checks |
+| --- | --- |
+| `[spike 1]` | Which buildings carry `AdminBuilding`, and every admin building prefab in the game |
+| `[spike 3]` | Whether a mod's own system is saved and loaded (only with the save probe, below) |
+| `[spike 4]` | Which company type each worker's workplace has, and the buildings where it has none |
+| `[spike 5]` | Year, month and calendar values at every month change |
+| `[spike 6]` | Spread of household wealth, with suggested cut points for the 4 bands |
+| `[spike 7]` | Residents by age group, and the age range in days of each group |
+| `[spike 8]` | That `ElectionAtlas.Model.dll` loaded, and from where |
+| `[phase 3]` | Voting-age residents and average happiness per district |
+| `[preview]` | A real election on your city with two test parties: turnout, shares and each district's winner and margin |
+
+**Save probe (spike 3), optional:** this checks whether the game saves data from a system a mod adds. A save made with the probe may not load once the probe is gone, so use a copy of a city.
+
+1. Copy a save.
+2. Turn on Options → Election Atlas → Debug → Save probe, then restart the game.
+3. Load the copy, save it, then load it again.
+4. Turn the probe off afterwards.
 
 ## Notes
 

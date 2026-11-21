@@ -31,6 +31,16 @@ namespace ElectionAtlas
             // on a long update interval, never every frame (see "Keeping it lightweight").
             updateSystem.UpdateAt<ElectionsUISystem>(SystemUpdatePhase.UIUpdate);
 
+#if DEBUG
+            // In-game spikes: one play session answers what phases 2-5 depend on. Never in Release builds.
+            updateSystem.UpdateAt<Diagnostics.SpikeLoggerSystem>(SystemUpdatePhase.GameSimulation);
+            if (Settings.SaveProbe)
+            {
+                updateSystem.UpdateAt<Diagnostics.SpikeSaveProbeSystem>(SystemUpdatePhase.GameSimulation);
+                Log.Info("Save probe (spike 3) enabled");
+            }
+#endif
+
             Log.Info($"{Id} loaded");
         }
 
