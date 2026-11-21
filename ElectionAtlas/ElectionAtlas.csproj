@@ -65,4 +65,28 @@
 		<None Include="$(ModPropsFile)" Link="Properties\Mod.props" />
 		<None Include="$(ModTargetsFile)" Link="Properties\Mod.targets" />
 	</ItemGroup>
+
+	<!--
+		The toolchain's ModPostProcessor targets .NET 6. DOTNET_ROLL_FORWARD=Major lets it run on a newer runtime
+		only when .NET 6 isn't installed; with .NET 6 present nothing changes. This replaces the Mod.targets target
+		of the same name (allowed, per the note at the top of Mod.targets), adding only the environment variable.
+		Its order is pinned explicitly: an overriding target would otherwise run after DeployWIP and ship an
+		unprocessed DLL.
+	-->
+	<Target Name="RunModPostProcessor" AfterTargets="ModPostProcessorConfig" BeforeTargets="DeployWIP" Condition="'$(HasModToolchain)' == 'true' And '$(NeedBuild)' == 'true'">
+		<Error Condition="!Exists('$(ModPostProcessorFullPath)')" Text="Post processor not found, please check the path: $(ModPostProcessorFullPath)" />
+		<Message Text="Run post processor: $(ModPostProcessorArgs)" Importance="high" />
+		<Exec Command="$(ModPostProcessorArgs)" LogStandardErrorAsError="true" EnvironmentVariables="DOTNET_ROLL_FORWARD=Major" />
+	</Target>
+
+	<!--
+		The toolchain's DeployWIP target deletes Mods\ElectionAtlas and copies in the C# output, which would
+		also delete the UI bundle. Rebuild the UI straight after, into the same folder, so one `dotnet build`
+		deploys everything. Skip with -p:SkipUI=true.
+	-->
+	<Target Name="BuildAndDeployUI" AfterTargets="DeployWIP" Condition="'$(HasModToolchain)' == 'true' And '$(SkipUI)' != 'true'">
+		<Warning Condition="!Exists('$(MSBuildProjectDirectory)\UI\node_modules')" Text="UI dependencies are missing, so the mod was deployed without its UI. Run 'npm install' in ElectionAtlas\UI, then build again." />
+		<Message Condition="Exists('$(MSBuildProjectDirectory)\UI\node_modules')" Text="Building UI into $(DeployDir)" Importance="high" />
+		<Exec Condition="Exists('$(MSBuildProjectDirectory)\UI\node_modules')" Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)\UI" EnvironmentVariables="CSII_USERDATAPATH=$(UserDataPath)" />
+	</Target>
 </Project>

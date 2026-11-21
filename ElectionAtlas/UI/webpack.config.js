@@ -11,6 +11,7 @@ module.exports = {
     path: outDir,
     filename: "[name].mjs",
     library: { type: "module" },
+    publicPath: "coui://ui-mods/", // as in the toolchain's UI template, for images and fonts
     clean: false,
   },
   experiments: { outputModule: true },

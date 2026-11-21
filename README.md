@@ -47,7 +47,8 @@ ElectionAtlas.Model.Tests/      xUnit, net8.0
        ```powershell
        [Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'User')
        ```
-2. .NET SDK 8+ and Node 20+.
+2. .NET SDK 8+ and Node 20+. The toolchain's post-processor was built for .NET 6; the project lets it run on .NET 8 when .NET 6 isn't installed, so there's nothing extra to install.
+3. Once, in `ElectionAtlas\UI`: `npm install`.
 
 ## Build
 
@@ -69,7 +70,7 @@ C# mod only:
 dotnet build ElectionAtlas\ElectionAtlas.csproj -c Release
 ```
 
-- **With the toolchain:** this imports `Mod.props` / `Mod.targets`, which post-process the DLL and deploy it to your local Mods folder.
+- **With the toolchain:** this imports `Mod.props` / `Mod.targets`, which post-process the DLL (Burst) and deploy it to `Mods\ElectionAtlas` in the game's user data folder. The deploy wipes that folder, so the project then rebuilds the UI into it: one `dotnet build` deploys everything. Pass `-p:SkipUI=true` to skip the UI.
 - **Without the toolchain:** this is a compile check against the game's own DLLs. Nothing is deployed. Copy `ElectionAtlas\Local.props.example` to `Local.props` and set `GameManagedPath` if the game isn't in the default Steam folder.
 
 UI module:

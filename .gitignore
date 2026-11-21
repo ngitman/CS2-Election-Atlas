@@ -5,3 +5,6 @@ obj/
 Local.props
 node_modules/
 dist/
+# ModPostProcessor caches (the toolchain's Mod.props excludes these too)
+Library/
+Logs/
