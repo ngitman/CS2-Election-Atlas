@@ -27,8 +27,9 @@ namespace ElectionAtlas
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEN(Settings));
             AssetDatabase.global.LoadSettings(Id, Settings, new Setting(this));
 
-            // UI bindings only. Election and poll systems arrive in phases 2-5 and will run
-            // on a long update interval, never every frame (see "Keeping it lightweight").
+            // The City Hall gate (phase 2) runs in the UI phase so it reacts while paused; it only counts
+            // chunks every 32 frames. Election and poll systems (phases 3-5) will run on a long interval.
+            updateSystem.UpdateAt<CityHallSystem>(SystemUpdatePhase.UIUpdate);
             updateSystem.UpdateAt<ElectionsUISystem>(SystemUpdatePhase.UIUpdate);
 
 #if DEBUG

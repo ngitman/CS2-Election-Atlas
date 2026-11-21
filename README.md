@@ -6,9 +6,10 @@ Election results for every district of your city, as exact numbers and as maps. 
 
 ## Status
 
-- **Phase 1 (scaffold):** the mod loads, logs, registers its settings and the UI bindings; a top-left toolbar button opens an empty Elections panel. Not yet tested in game.
+- **Phase 1 (scaffold):** done and tested in game (1.6.4): the mod and model load, Burst code loads, the settings show in Options, and the top-left button opens the Elections panel.
+- **Phase 2 (City Hall gate):** built, not yet tested in game. Detects a placed City Hall (by `AdminBuilding` plus a "cityhall" prefab name, since the Central Bank carries `AdminBuilding` too), moves through No City Hall → Awaiting founding → Active ⇄ Suspended, and shows the state in the panel. Not saved yet; recomputed on load.
 - **Phase 4a (model library):** done. `ElectionAtlas.Model` runs elections and polls over voter groups, with no game references: lean, turnout calibrated to real-world presets, vote shares, governing rules, approval from the game's happiness, and frozen election snapshots with tinted map colors. 44 xUnit tests.
-- Next: phases 2 (City Hall gate) and 3 (voter-group reader).
+- Next: phase 3 (voter-group reader), after spikes 4, 6 and 7 run on a populated city.
 
 ## Roadmap
 

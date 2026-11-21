@@ -1,5 +1,18 @@
 const path = require("path");
+const webpack = require("webpack");
 const mod = require("./mod.json");
+
+// The game reads this header to register the UI module's id, author, version and dependencies
+// (without it the module registers with null metadata). Same fields as the toolchain's UI template.
+const header = [
+  "/**",
+  " * Cities: Skylines II UI Module",
+  ` * Id: ${mod.id}`,
+  ` * Author: ${mod.author}`,
+  ` * Version: ${mod.version}`,
+  ` * Dependencies: ${mod.dependencies.join(",")}`,
+  " */",
+].join("\n");
 
 // The toolchain sets CSII_USERDATAPATH; without it the build lands in ./dist.
 const userData = process.env.CSII_USERDATAPATH;
@@ -33,6 +46,10 @@ module.exports = {
     "cs2/modding": "cs2/modding",
     "cohtml/cohtml": "cohtml/cohtml",
   },
+  plugins: [
+    // Added after minification (REPORT stage) so the minifier can't strip it.
+    new webpack.BannerPlugin({ banner: header, raw: true, stage: webpack.Compilation.PROCESS_ASSETS_STAGE_REPORT }),
+  ],
   devtool: false,
   performance: { hints: false },
 };
