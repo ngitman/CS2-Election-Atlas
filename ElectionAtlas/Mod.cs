@@ -1,15 +1,15 @@
-using CityElections.Systems;
+using ElectionAtlas.Systems;
 using Colossal.IO.AssetDatabase;
 using Colossal.Logging;
 using Game;
 using Game.Modding;
 using Game.SceneFlow;
 
-namespace CityElections
+namespace ElectionAtlas
 {
     public sealed class Mod : IMod
     {
-        public const string Id = "CityElections";
+        public const string Id = "ElectionAtlas";
 
         public static readonly ILog Log = LogManager.GetLogger($"{Id}.{nameof(Mod)}").SetShowsErrorsInUI(false);
 

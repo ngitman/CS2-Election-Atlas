@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!--
+		The election model. No reference to the game, so it builds and tests anywhere.
+		netstandard2.0 loads in the game (Unity Mono) and in the net8.0 test project.
+	-->
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<LangVersion>9</LangVersion>
+		<RootNamespace>ElectionAtlas.Model</RootNamespace>
+		<AssemblyName>ElectionAtlas.Model</AssemblyName>
+		<GenerateDocumentationFile>false</GenerateDocumentationFile>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+	</PropertyGroup>
+</Project>

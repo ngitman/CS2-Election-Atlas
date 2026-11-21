@@ -1,9 +1,11 @@
+using ElectionAtlas.Model;
 using Colossal.IO.AssetDatabase;
 using Game.Modding;
 using Game.Settings;
 
-namespace CityElections
+namespace ElectionAtlas
 {
+    // GoverningRule and TurnoutPreset live in ElectionAtlas.Model, which reads them.
     public enum ElectionCadence
     {
         EveryYear,
@@ -11,21 +13,7 @@ namespace CityElections
         EveryFourYears,
     }
 
-    public enum GoverningRule
-    {
-        PopularVote,
-        MostDistricts,
-    }
-
-    public enum TurnoutPreset
-    {
-        UsMunicipal,
-        UsGeneral,
-        UkGeneral,
-        Nordic,
-    }
-
-    // Settings from the design doc. Phase 1 only shows them in the options menu;
+    // Phase 1 only shows these in the options menu;
     // the scheduler and vote model start reading them in phases 4-5.
     [FileLocation(Mod.Id)]
     [SettingsUIGroupOrder(kScheduleGroup, kRulesGroup)]

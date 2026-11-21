@@ -1,7 +1,7 @@
 using Colossal.UI.Binding;
 using Game.UI;
 
-namespace CityElections.Systems
+namespace ElectionAtlas.Systems
 {
     /// <summary>
     /// Bindings between C# and the Elections panel. ValueBindings only push to the UI
@@ -9,7 +9,7 @@ namespace CityElections.Systems
     /// </summary>
     public partial class ElectionsUISystem : UISystemBase
     {
-        public const string kGroup = "cityElections";
+        public const string kGroup = "electionAtlas";
 
         private ValueBinding<bool> m_PanelOpen;
 

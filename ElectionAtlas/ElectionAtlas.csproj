@@ -4,8 +4,8 @@
 		<TargetFramework>net48</TargetFramework>
 		<LangVersion>9</LangVersion>
 		<Configurations>Debug;Release</Configurations>
-		<RootNamespace>CityElections</RootNamespace>
-		<AssemblyName>CityElections</AssemblyName>
+		<RootNamespace>ElectionAtlas</RootNamespace>
+		<AssemblyName>ElectionAtlas</AssemblyName>
 		<!-- Mod information used when publishing to Paradox Mods -->
 		<PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
 		<!-- The UI module is built by npm, not MSBuild -->
@@ -53,6 +53,11 @@
 		<Reference Include="Unity.Collections"><Private>false</Private></Reference>
 		<Reference Include="Unity.Entities"><Private>false</Private></Reference>
 		<Reference Include="Unity.Mathematics"><Private>false</Private></Reference>
+	</ItemGroup>
+
+	<!-- The election model; its DLL must ship next to ElectionAtlas.dll (spike 8) -->
+	<ItemGroup>
+		<ProjectReference Include="..\ElectionAtlas.Model\ElectionAtlas.Model.csproj" />
 	</ItemGroup>
 
 	<ItemGroup Condition="'$(HasModToolchain)' == 'true'">

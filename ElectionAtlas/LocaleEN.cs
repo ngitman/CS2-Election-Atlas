@@ -1,7 +1,8 @@
 using System.Collections.Generic;
+using ElectionAtlas.Model;
 using Colossal;
 
-namespace CityElections
+namespace ElectionAtlas
 {
     public sealed class LocaleEN : IDictionarySource
     {
@@ -16,7 +17,7 @@ namespace CityElections
         {
             return new Dictionary<string, string>
             {
-                { m_Setting.GetSettingsLocaleID(), "City Elections" },
+                { m_Setting.GetSettingsLocaleID(), "Election Atlas" },
                 { m_Setting.GetOptionTabLocaleID(Setting.kSection), "Main" },
 
                 { m_Setting.GetOptionGroupLocaleID(Setting.kScheduleGroup), "Schedule" },
