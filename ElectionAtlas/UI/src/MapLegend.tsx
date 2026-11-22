@@ -2,7 +2,7 @@ import React from "react";
 import { trigger } from "cs2/api";
 import { Panel } from "cs2/ui";
 import { Districts, GROUP } from "./bindings";
-import { Dot, ElectionPicker } from "./parts";
+import { Dot, ElectionPicker, StackBar } from "./parts";
 
 /**
  * The panel collapsed for the map view: which election the map shows, what the colors mean, and the way back.
@@ -16,6 +16,7 @@ export const MapLegend = ({ d }: { d: Districts | null }) => {
         {d && d.count ? (
           <>
             <ElectionPicker d={d} />
+            <StackBar parties={parties} shares={parties.map((p) => p.share ?? 0)} />
             {parties.map((p) => (
               <div key={p.id} className="ea-legend-row">
                 <Dot color={p.color} />
