@@ -2,7 +2,7 @@ import React from "react";
 import { camera, selectedInfo } from "cs2/bindings";
 import { Panel } from "cs2/ui";
 import { Districts, Overview } from "./bindings";
-import { count, monthLabel, pct, points } from "./format";
+import { approvalPct, count, monthLabel, pct, points } from "./format";
 import { InfoLine, ShareBar, Sparkline } from "./parts";
 
 /** A floating card for one district: how it voted, and how it feels about the government now. */
@@ -47,7 +47,7 @@ export const DistrictPopup = ({ d, o, id, onClose }: { d: Districts | null; o: O
           <InfoLine label="Turnout">{pct(district.turnout)}</InfoLine>
           <InfoLine label="Votes cast">{`${count(district.votes)} of ${count(district.eligible)}`}</InfoLine>
           <InfoLine label={governing ? `Approval of ${governing.name} now` : "Approval now"}>
-            {district.approval !== null ? Math.round(district.approval) : "not polled yet"}
+            {district.approval !== null ? approvalPct(district.approval) : "not polled yet"}
           </InfoLine>
         </div>
 

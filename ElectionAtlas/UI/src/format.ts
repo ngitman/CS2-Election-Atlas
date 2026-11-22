@@ -30,3 +30,14 @@ export const inkFor = (hex: string): string => {
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   return luminance > 0.6 ? "#1b2230" : "#ffffff";
 };
+
+/** Approval on its 0-100 scale as "62%". */
+export const approvalPct = (v: number | undefined | null): string =>
+  v === undefined || v === null || isNaN(v) ? "-" : `${Math.round(v)}%`;
+
+/** A #rrggbb color with an alpha, for tinted backgrounds. */
+export const withAlpha = (hex: string, alpha: number): string => {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  if (!m) return `rgba(255, 255, 255, ${alpha})`;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
+};

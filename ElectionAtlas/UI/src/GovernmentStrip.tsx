@@ -1,6 +1,6 @@
 import React from "react";
 import { Overview } from "./bindings";
-import { monthLabel, months } from "./format";
+import { approvalPct, monthLabel, months } from "./format";
 import { Dot } from "./parts";
 
 /** One glance: who governs, how the city feels, when it votes next. Plus a callout when something's wrong. */
@@ -40,7 +40,7 @@ export const GovernmentStrip = ({ o }: { o: Overview | null }) => {
         </div>
         <div className="ea-strip__cell">
           <div className="ea-muted ea-small">Approval</div>
-          <div className="ea-strip__value">{o.poll ? Math.round(o.poll.approval) : "-"}</div>
+          <div className="ea-strip__value">{o.poll ? approvalPct(o.poll.approval) : "-"}</div>
           <div className="ea-muted ea-small">{o.poll ? `poll of ${monthLabel(o.poll.month)}` : "no poll yet"}</div>
         </div>
         <div className="ea-strip__cell">

@@ -1,6 +1,6 @@
 import React from "react";
 import { PanelSection, PanelSectionRow } from "cs2/ui";
-import { monthLabel, pct, points } from "./format";
+import { approvalPct, monthLabel, pct, points } from "./format";
 import { Dot } from "./parts";
 
 /** Props written by DistrictElectionSection.OnWriteProperties in C#. */
@@ -64,7 +64,7 @@ export const DistrictSection = (props: DistrictSectionProps) => {
       {e ? <PanelSectionRow left="Turnout" right={`${pct(e.turnout)} of ${e.eligible.toLocaleString()}`} /> : null}
       <PanelSectionRow
         left={props.governing ? `Approval of ${props.governing}` : "Approval"}
-        right={props.approval !== null && props.approval !== undefined ? `${Math.round(props.approval)} / 100` : "not polled yet"}
+        right={props.approval !== null && props.approval !== undefined ? approvalPct(props.approval) : "not polled yet"}
       />
     </PanelSection>
   );

@@ -1,7 +1,7 @@
 import React from "react";
 import { trigger } from "cs2/api";
 import { GROUP, History, Overview, Polls } from "./bindings";
-import { monthLabel, pct } from "./format";
+import { approvalPct, monthLabel, pct } from "./format";
 import { Dot, ShareBar, Sparkline, StackBar } from "./parts";
 
 // ------------------------------------------------------------------ History
@@ -53,7 +53,7 @@ export const PollsTab = ({ p }: { p: Polls | null }) => {
       <Sparkline values={records.map((r) => r.approval)} />
       <div className="ea-axis">
         <span>{monthLabel(records[0].month)}</span>
-        <span>{`${monthLabel(last.month)}: ${Math.round(last.approval)}`}</span>
+        <span>{`${monthLabel(last.month)}: ${approvalPct(last.approval)}`}</span>
       </div>
 
       <div className="ea-section">
@@ -76,7 +76,7 @@ export const PollsTab = ({ p }: { p: Polls | null }) => {
                   <div key={party.id} style={{ width: `${(r.intention[i] ?? 0) * 100}%`, backgroundColor: party.color }} />
                 ))}
               </div>
-              <div className="ea-share__value">{Math.round(r.approval)}</div>
+              <div className="ea-share__value">{approvalPct(r.approval)}</div>
             </div>
           ))}
       </div>
