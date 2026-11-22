@@ -1,26 +1,14 @@
 # Election Atlas (Cities: Skylines II mod)
 
-Election results for every district of your city, as exact numbers and as maps. Once a City Hall is built, every district votes on a schedule you set. Turnout and vote choice come from the citizens who actually live there, and a monthly poll tracks sentiment between elections. Past elections are archived so you can flick back through them. Elections in v1 don't change anything in the city; policy actions come later.
+Election results for every district of your city, as exact numbers and as maps. Once a City Hall is built, every district votes on a schedule you set. Elections and monthly polls count adult and senior residents, including adult students. Past elections are archived so you can flick back through them. Elections in v1 don't change anything in the city; policy actions come later.
 
-> **Work in progress.** Not yet released on Paradox Mods and not yet tested in game.
+> **First release in testing.** Elections, polls, and the district map have run in game. See the combined [release checklist](TESTING.md).
 
 ## Status
 
-- **Phase 1 (scaffold):** done and tested in game (1.6.4): the mod and model load, Burst code loads, the settings show in Options, and the top-left button opens the Elections panel.
-- **Phases 3–6 (reader, elections, polls, saving, the panel, district popups and the map view):** built and partly tested in game; see [TESTING.md](TESTING.md). Voters are counted by a monthly census: a Burst job reads households in slices of 1,024 on worker threads during the last quarter of each month, so the main thread never waits, and the poll or election at the month change runs on it straight away. A City Hall shutdown doesn't stop elections; it costs the governing party approval and votes. Saving election data is an experimental, off-by-default option. Not built yet: the party editor.
-- **Phase 2 (City Hall gate):** built, not yet tested in game. Detects a placed City Hall (by `AdminBuilding` plus a "cityhall" prefab name, since the Central Bank carries `AdminBuilding` too), moves through No City Hall → Awaiting founding → Active ⇄ Suspended, and shows the state in the panel. Not saved yet; recomputed on load.
-- **Phase 4a (model library):** done. `ElectionAtlas.Model` runs elections and polls over voter groups, with no game references: lean, turnout calibrated to real-world presets, vote shares, governing rules, approval from the game's happiness, and frozen election snapshots with tinted map colors. 44 xUnit tests.
-- Next: phase 3 (voter-group reader), after spikes 4, 6 and 7 run on a populated city.
-
-## Roadmap
-
-1. Scaffold: mod loads, settings, empty panel
-2. City Hall gate: elections unlock with a City Hall and pause without one
-3. Voter-group reader: every adult resident grouped by district, age, education, wealth and job (Burst job in worker-thread slices, as a census late each month)
-4. Vote model (done) and a debug button that runs one real election
-5. Scheduler and save data: elections on a cadence, monthly polls, archive in the save file
-6. Full UI: district cards, results table, and map modes for winner (tinted by margin), turnout, swing, party strength and approval
-7. Tuning and release on Paradox Mods
+- The monthly census reads households in worker-thread slices during the last quarter of each month. Elections and polls use the census at the month boundary. A City Hall shutdown reduces government approval and support.
+- The **Parties** tab edits the lineup for future elections and polls. Party names, colors, and positions are saved in mod settings. Each archived election preserves its own party details.
+- Election history is saved in the city by default. The release checklist includes verifying save/reload and that a test save opens with the mod disabled.
 
 ## Layout
 
@@ -135,7 +123,7 @@ The game takes a long time to start, so most testing is set up to avoid restarts
 
 **Build flag.** Everything in `ElectionAtlas/Dev/` and `ElectionAtlas/Diagnostics/` is compiled only when `DEV_TOOLS` is defined: on in Debug builds, off in Release. `-p:DevTools=true` turns it on in Release, and `-p:DevTools=false` turns it off in Debug. Publishing refuses any build that has it on.
 
-**One-command loop.** `tools\dev.ps1` builds and deploys (Debug), then starts the game through Steam. Set the game's Steam launch options once (Library → Cities: Skylines II → Properties → Launch Options) to `-continuelastsave -noSplash -developerMode --uiDeveloperMode`, so it loads straight into your last save. Those are fields of the game's own `GameManager.Configuration`; `-developerMode` turns on the game's built-in dev tools, and `--uiDeveloperMode` opens the UI debugger on `http://localhost:9444` and hot-reloads the UI while `npm run dev` runs in `ElectionAtlas\UI`. Don't start `Cities2.exe` directly: the game's platform integration fails to initialize and it never gets past startup.
+**One-command loop.** `tools\dev.ps1` builds and deploys (Debug), then starts the game through Steam. The supported Steam launch options for this workflow are `-noSplash -developerMode --uiDeveloperMode`. `-developerMode` turns on the game's built-in dev tools. `--uiDeveloperMode` opens the debugger on `http://localhost:9444` and hot-reloads the UI while `npm run dev` runs in `ElectionAtlas\UI`. The Paradox Launcher manages continuing the last save.
 
 ```powershell
 .\tools\dev.ps1 -Restart
@@ -147,9 +135,8 @@ The game takes a long time to start, so most testing is set up to avoid restarts
 
 | Button | What it does |
 | --- | --- |
-| Run election | Reads every resident, runs an election with the test parties, and shows turnout, shares, the governing party and the closest district. Kept in memory (reset on load); the next election treats the winner as incumbent. The first one moves Awaiting founding to Active. |
+| Run election | Reads eligible residents and holds an election with the current lineup. The first election moves Awaiting founding to Active. Later elections treat the last winner as incumbent. |
 | Run poll | Voting intention among all adults and approval of the governing party |
-| Parties: 2 / 4 | Switches the test lineup between Left/Right and four parties |
 | Clear elections | Forgets the dev elections; nobody governs |
 | Spike report | Writes a full spike report to `ElectionAtlas.Spikes.log` now, even while paused |
 | Export city CSV | Writes the city's voter groups to `ModsData\ElectionAtlas\dev\city-<time>.csv` in the game's user data folder |

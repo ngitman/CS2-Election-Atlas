@@ -1,3 +1,4 @@
+using System;
 using ElectionAtlas.Model;
 using Colossal.IO.AssetDatabase;
 using Game.Modding;
@@ -38,14 +39,42 @@ namespace ElectionAtlas
         [SettingsUISection(kSection, kRulesGroup)]
         public TurnoutPreset TurnoutPreset { get; set; }
 
-        /// <summary>Test lineup until the party editor exists. Changing it starts a fresh lineup at the next election.</summary>
-        [SettingsUISection(kSection, kRulesGroup)]
+        // Retain the old setting so existing players start the editor from their selected preset.
+        [SettingsUIHidden]
         public PartyLineup PartyLineup { get; set; }
 
-        /// <summary>
-        /// Experimental: store election history in the save file. Read once at mod load (restart to change).
-        /// Off by default until it's confirmed that saves still load after the mod is removed (spike 3).
-        /// </summary>
+        [SettingsUIHidden]
+        public string CustomPartyLineup { get; set; }
+
+        internal static readonly Party[] TwoPartyPreset = SampleParties.Two();
+        internal static readonly Party[] FourPartyPreset = SampleParties.Four();
+        private string m_ReadPartyLineup;
+        private Party[] m_CustomParties;
+
+        internal Party[] GetParties()
+        {
+            if (!string.Equals(CustomPartyLineup, m_ReadPartyLineup, StringComparison.Ordinal))
+            {
+                m_ReadPartyLineup = CustomPartyLineup;
+                m_CustomParties = null;
+                if (!string.IsNullOrEmpty(m_ReadPartyLineup))
+                {
+                    try { m_CustomParties = PartyLineupSettings.ReadSaved(m_ReadPartyLineup); }
+                    catch (FormatException ex) { Mod.Log.Warn($"Using the default party lineup. {ex.Message}"); }
+                }
+            }
+            return m_CustomParties ?? (PartyLineup == PartyLineup.FourParties ? FourPartyPreset : TwoPartyPreset);
+        }
+
+        internal void SaveParties(Party[] parties)
+        {
+            string previous = CustomPartyLineup;
+            CustomPartyLineup = PartyLineupSettings.Write(parties);
+            try { ApplyAndSave(); }
+            catch { CustomPartyLineup = previous; throw; }
+        }
+
+        /// <summary>Whether the next city save includes election history. Defaults to on.</summary>
         [SettingsUISection(kSection, kSaveGroup)]
         public bool SaveElectionData { get; set; }
 
@@ -62,6 +91,7 @@ namespace ElectionAtlas
             GoverningRule = GoverningRule.PopularVote;
             TurnoutPreset = TurnoutPreset.UsGeneral;
             PartyLineup = PartyLineup.TwoParties;
+            CustomPartyLineup = null;
             SaveElectionData = true;
 #if DEV_TOOLS
             SaveProbe = false;

@@ -1,6 +1,6 @@
 namespace ElectionAtlas.Model
 {
-    /// <summary>Test party lineups for dev elections, ElectionAtlas.Lab and replay tests, until the party editor exists.</summary>
+    /// <summary>Built-in presets shared by the party editor, Lab and replay tests.</summary>
     public static class SampleParties
     {
         public static Party[] Two()

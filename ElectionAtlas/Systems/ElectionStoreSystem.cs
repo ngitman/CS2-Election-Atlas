@@ -22,7 +22,7 @@ namespace ElectionAtlas.Systems
         private const int kDetailedPolls = 24;
 
         // Sanity limits: a block claiming more than these is corrupt, not a big city.
-        private const int kMaxElections = 100000, kMaxParties = 64, kMaxDistricts = 100000, kMaxPolls = 1000000;
+        private const int kMaxElections = 100000, kMaxParties = PartyLineupSettings.MaxParties, kMaxDistricts = 100000, kMaxPolls = 1000000;
 
         private ElectionSystem m_Elections;
 

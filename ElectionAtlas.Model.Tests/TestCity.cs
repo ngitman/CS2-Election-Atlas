@@ -12,8 +12,7 @@ namespace ElectionAtlas.Model.Tests
         public static readonly Party[] TwoParties = { Left, Right };
 
         /// <summary>
-        /// Every slot of every district filled with a random count and happiness.
-        /// 50 districts x 200 slots = 10,000 groups.
+        /// A synthetic city with random counts and happiness for each populated group.
         /// </summary>
         public static GroupTable Random(int districts = 50, int seed = 1)
         {
@@ -27,6 +26,7 @@ namespace ElectionAtlas.Model.Tests
             {
                 var age = (AgeBand)a;
                 var job = (JobSector)j;
+                if (age == AgeBand.Elderly && job == JobSector.Student) continue;
                 if (age == AgeBand.Elderly && job != JobSector.Retired && rng.NextDouble() < 0.8) continue;
                 groups.Add(new VoterGroup(d, age, e, w, job, rng.Next(1, 400), (float)(rng.NextDouble() * 100)));
             }

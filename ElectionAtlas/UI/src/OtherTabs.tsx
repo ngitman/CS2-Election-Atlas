@@ -1,6 +1,6 @@
 import React from "react";
 import { trigger } from "cs2/api";
-import { GROUP, History, Overview, Polls } from "./bindings";
+import { GROUP, History, Polls } from "./bindings";
 import { approvalPct, monthLabel, pct } from "./format";
 import { Dot, ShareBar, Sparkline, StackBar } from "./parts";
 
@@ -82,39 +82,4 @@ export const PollsTab = ({ p }: { p: Polls | null }) => {
       </div>
     </div>
   );
-};
-
-// ------------------------------------------------------------------ Parties
-
-export const PartiesTab = ({ o }: { o: Overview | null }) => {
-  const parties = o?.parties ?? [];
-  return (
-    <div>
-      {parties.map((party) => (
-        <div key={party.id} className="ea-card">
-          <div className="ea-card__head">
-            <div className="ea-party">
-              <Dot color={party.color} large />
-              <span className="ea-bold">{party.name}</span>
-            </div>
-            {o?.governing?.id === party.id ? <span className="ea-muted">Governing</span> : null}
-          </div>
-          <div className="ea-muted ea-small">
-            {`${describe(party.economic ?? 0, "left", "right")} on the economy, ${describe(party.social ?? 0, "progressive", "traditional")} on social issues`}
-          </div>
-        </div>
-      ))}
-      <div className="ea-muted ea-small" style={{ marginTop: "8rem" }}>
-        Choose the lineup in Options, Election Atlas, Parties. A party editor comes later.
-      </div>
-    </div>
-  );
-};
-
-const describe = (v: number, low: string, high: string): string => {
-  const a = Math.abs(v);
-  const side = v < 0 ? low : high;
-  if (a < 0.15) return "centrist";
-  if (a < 0.45) return `leans ${side}`;
-  return `strongly ${side}`;
 };

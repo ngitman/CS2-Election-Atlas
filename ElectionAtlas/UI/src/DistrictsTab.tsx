@@ -41,7 +41,7 @@ export const DistrictsTab = ({ d, onOpen, openId }: { d: Districts | null; onOpe
   );
 };
 
-type SortKey = "name" | "margin" | "turnout" | "approval" | number;
+type SortKey = "name" | "votes" | "margin" | "turnout" | "approval" | number;
 const PAGE_SIZE = 8;
 
 /** Every district as a row: each party's share as a column, then margin, turnout and approval.
@@ -68,6 +68,7 @@ const DistrictTable = ({
   const value = (x: DistrictView): number | string => {
     if (sort.key === "name") return x.name.toLowerCase();
     if (sort.key === "margin") return x.votes > 0 ? x.margin : -1;
+    if (sort.key === "votes") return x.votes;
     if (sort.key === "turnout") return x.turnout;
     if (sort.key === "approval") return x.approval ?? -1;
     return partyShare(x, sort.key);
@@ -108,6 +109,7 @@ const DistrictTable = ({
             {voted ? pct(partyShare(x, i)) : "-"}
           </div>
         ))}
+        <div className="ea-td ea-td--num">{count(x.votes)}</div>
         <div className="ea-td ea-td--num">{voted && seat ? `+${(x.margin * 100).toFixed(1)}` : "-"}</div>
         <div className="ea-td ea-td--num">{pct(x.turnout)}</div>
         <div className="ea-td ea-td--num">{approvalPct(x.approval)}</div>
@@ -122,6 +124,7 @@ const DistrictTable = ({
         {parties.map((p, i) => (
           <Head key={p.id} k={i} label={p.name} className="ea-td ea-td--num" />
         ))}
+        <Head k="votes" label="Votes" className="ea-td ea-td--num" />
         <Head k="margin" label="Margin" className="ea-td ea-td--num" />
         <Head k="turnout" label="Turnout" className="ea-td ea-td--num" />
         <Head k="approval" label="Approval" className="ea-td ea-td--num" />

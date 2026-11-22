@@ -46,7 +46,6 @@ namespace ElectionAtlas.Dev
             AddBinding(new TriggerBinding(kGroup, "devAdvanceMonth", () => Run("advance month", () => m_Elections.DevAdvanceMonths(1))));
             AddBinding(new TriggerBinding(kGroup, "devSkipToElection", () => Run("skip to election", m_Elections.DevSkipToElection)));
             AddBinding(new TriggerBinding(kGroup, "devReset", () => Run("reset elections", m_Elections.DevReset)));
-            AddBinding(new TriggerBinding(kGroup, "devSwitchParties", () => Run("switch parties", SwitchParties)));
             AddBinding(new TriggerBinding(kGroup, "devSpikeReport", () => Run("spike report", SpikeReport)));
             AddBinding(new TriggerBinding(kGroup, "devExportCity", () => Run("export city", ExportCity)));
             AddBinding(new TriggerBinding(kGroup, "devBenchmark", () => Run("benchmark readers", BenchmarkReaders)));
@@ -56,14 +55,6 @@ namespace ElectionAtlas.Dev
         }
 
         // ---------------------------------------------------------------- commands
-
-        private string SwitchParties()
-        {
-            var settings = Mod.Settings;
-            if (settings == null) return "Settings aren't loaded.";
-            settings.PartyLineup = settings.PartyLineup == PartyLineup.TwoParties ? PartyLineup.FourParties : PartyLineup.TwoParties;
-            return $"Parties now: {string.Join(", ", m_Elections.CurrentParties().Select(p => p.Name))} (Options > Election Atlas > Parties). Applies from the next poll or election.";
-        }
 
         private string SpikeReport()
         {

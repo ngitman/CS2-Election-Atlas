@@ -9,6 +9,7 @@ declare module "cs2/modding" {
     extend(modulePath: string, exportName: string, extend: (current: any) => any): void;
   }
   export type ModRegistrar = (moduleRegistry: ModuleRegistry) => void;
+  export function getModule<T>(path: string, exportName: string): T;
 }
 
 declare module "cs2/api" {
@@ -53,6 +54,9 @@ declare module "cs2/ui" {
     children?: ReactNode;
   }
   export const Button: (props: ButtonProps) => JSX.Element;
+
+  /** The game's scroll container (a plain overflow:auto div doesn't scroll in Cohtml; it just clips). */
+  export const Scrollable: (props: { vertical?: boolean; horizontal?: boolean; smooth?: boolean; className?: string; style?: CSSProperties; children?: ReactNode }) => JSX.Element;
 
   // The game's InfoSection / InfoRow (same components its own info panels use).
   export const PanelSection: (props: { className?: string; children?: ReactNode }) => JSX.Element;

@@ -14,11 +14,12 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
+using CitizenStudent = Game.Citizens.Student;
 
 namespace ElectionAtlas.Systems
 {
     /// <summary>
-    /// The one voter reader. Turns every voting-age resident into voter-group slots (district x 200) with Burst jobs
+    /// The one voter reader. Turns adult and elderly residents into voter-group slots with Burst jobs
     /// and flat native data: a slice job over a snapshot of households (wealth, home district, members), then an
     /// aggregate job that sorts wealth into quartile bands and sums members into slots.
     ///
@@ -70,6 +71,7 @@ namespace ElectionAtlas.Systems
             [ReadOnly] public ComponentLookup<CurrentDistrict> CurrentDistricts;
             [ReadOnly] public ComponentLookup<Citizen> Citizens;
             [ReadOnly] public ComponentLookup<Worker> Workers;
+            [ReadOnly] public ComponentLookup<CitizenStudent> Students;
             [ReadOnly] public ComponentLookup<OfficeCompany> Offices;
             [ReadOnly] public ComponentLookup<IndustrialCompany> Industries;
             [ReadOnly] public ComponentLookup<PrefabRef> Prefabs;
@@ -119,7 +121,8 @@ namespace ElectionAtlas.Systems
                         var age = c.GetAge();
                         if (age == CitizenAge.Child) { Stats[kChildren]++; continue; }
                         if (age == CitizenAge.Teen) { Stats[kTeens]++; continue; }
-                        bool elderly = age != CitizenAge.Adult;
+                        bool elderly = age == CitizenAge.Elderly;
+                        if (!elderly && age != CitizenAge.Adult) continue;
                         Stats[elderly ? kElderly : kAdults]++;
 
                         JobSector job;
@@ -128,7 +131,8 @@ namespace ElectionAtlas.Systems
                             job = SectorOf(worker.m_Workplace);
                             CountJob(worker.m_Workplace, job);
                         }
-                        else job = elderly ? JobSector.Retired : JobSector.Unemployed;
+                        else if (elderly) job = JobSector.Retired;
+                        else job = Students.HasComponent(entity) ? JobSector.Student : JobSector.Unemployed;
 
                         int education = c.GetEducationLevel();
                         int happiness = c.Happiness;
@@ -408,6 +412,7 @@ namespace ElectionAtlas.Systems
             em.CompleteDependencyBeforeRO<CurrentDistrict>();
             em.CompleteDependencyBeforeRO<Citizen>();
             em.CompleteDependencyBeforeRO<Worker>();
+            em.CompleteDependencyBeforeRO<CitizenStudent>();
             em.CompleteDependencyBeforeRO<PrefabRef>();
             SliceJob(int.MaxValue).Run();
             return Finish(out districts, out districtNames);
@@ -459,6 +464,7 @@ namespace ElectionAtlas.Systems
                 CurrentDistricts = m_Owner.GetComponentLookup<CurrentDistrict>(true),
                 Citizens = m_Owner.GetComponentLookup<Citizen>(true),
                 Workers = m_Owner.GetComponentLookup<Worker>(true),
+                Students = m_Owner.GetComponentLookup<CitizenStudent>(true),
                 Offices = m_Owner.GetComponentLookup<OfficeCompany>(true),
                 Industries = m_Owner.GetComponentLookup<IndustrialCompany>(true),
                 Prefabs = m_Owner.GetComponentLookup<PrefabRef>(true),

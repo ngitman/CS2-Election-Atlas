@@ -82,7 +82,9 @@
 
 .ea-stack { display: flex; height: 14rem; border-radius: 7rem; overflow: hidden; margin: 6rem 0; }
 .ea-legend { display: flex; flex-wrap: wrap; }
-.ea-legend__item { display: flex; align-items: center; margin: 0 16rem 4rem 0; white-space: nowrap; }
+.ea-legend__item { display: flex; flex-direction: column; margin: 0 18rem 6rem 0; white-space: nowrap; }
+.ea-legend__line { display: flex; align-items: center; }
+.ea-legend__votes { margin-left: 14rem; }
 
 /* ---------- rows and bars ---------- */
 
@@ -141,6 +143,56 @@
 .ea-btn--primary:hover { background-color: #3f8ce8; }
 .ea-btn--on { background-color: rgba(125, 180, 255, 0.35); }
 
+/* ---------- party editor ---------- */
+
+.ea-party-editor { display: flex; align-items: flex-start; }
+.ea-party-editor__sidebar { width: 165rem; flex-shrink: 0; margin-right: 12rem; }
+.ea-party-editor__sidebar > div { margin-bottom: 6rem; }
+.ea-party-editor__item {
+  display: flex; align-items: center; padding: 6rem 8rem; margin-bottom: 4rem; border-radius: 7rem;
+  border: 1rem solid rgba(255, 255, 255, 0); background-color: rgba(255, 255, 255, 0.05);
+}
+.ea-party-editor__item:hover { background-color: rgba(255, 255, 255, 0.1); }
+.ea-party-editor__item--on, .ea-party-editor__item--on:hover { border-color: rgba(125, 180, 255, 0.8); background-color: rgba(125, 180, 255, 0.18); }
+.ea-btn--disabled, .ea-btn--disabled:hover { opacity: 0.35; }
+.ea-party-editor__presets { margin-right: 8rem; }
+.ea-swatches { display: flex; margin: -4rem 0 12rem 0; }
+.ea-swatch { width: 18rem; height: 18rem; margin-right: 6rem; border-radius: 9rem; border: 2rem solid rgba(255, 255, 255, 0); }
+.ea-swatch:hover { border-color: rgba(255, 255, 255, 0.5); }
+.ea-swatch--on, .ea-swatch--on:hover { border-color: #ffffff; }
+.ea-compass { margin-top: 10rem; text-align: center; }
+.ea-compass__plot {
+  position: relative; width: 100%; height: 150rem; margin: 2rem 0; border-radius: 7rem;
+  background-color: rgba(255, 255, 255, 0.05); border: 1rem solid rgba(255, 255, 255, 0.12);
+}
+.ea-compass__h { position: absolute; left: 0; right: 0; top: 50%; height: 1rem; background-color: rgba(255, 255, 255, 0.15); }
+.ea-compass__v { position: absolute; top: 0; bottom: 0; left: 50%; width: 1rem; background-color: rgba(255, 255, 255, 0.15); }
+.ea-compass__dot {
+  position: absolute; width: 12rem; height: 12rem; margin: -6rem 0 0 -6rem; border-radius: 6rem;
+  border: 2rem solid rgba(0, 0, 0, 0.35);
+}
+.ea-compass__dot--on { width: 16rem; height: 16rem; margin: -8rem 0 0 -8rem; border-radius: 8rem; border-color: #ffffff; }
+.ea-party-editor__form { flex: 1; min-width: 0; padding: 12rem; border-radius: 9rem; background-color: rgba(255, 255, 255, 0.06); }
+.ea-party-editor__details { display: flex; margin: 10rem 0 12rem 0; }
+.ea-party-editor__name { display: flex; flex-direction: column; flex: 1; min-width: 0; margin-right: 8rem; }
+.ea-party-editor__color { display: flex; flex-direction: column; width: 86rem; }
+.ea-party-editor__input {
+  width: 100%;
+  margin-top: 3rem;
+  padding: 5rem 7rem;
+  color: #fff;
+  border: 1rem solid rgba(255, 255, 255, 0.20);
+  border-radius: 5rem;
+  background-color: rgba(0, 0, 0, 0.30);
+}
+.ea-party-editor__input:focus { border-color: #7db4ff; }
+.ea-party-editor__input[aria-invalid="true"] { border-color: #e8a33d; }
+.ea-party-editor__axis { margin-bottom: 10rem; }
+.ea-party-editor__remove { display: flex; justify-content: flex-end; }
+.ea-party-editor__actions { display: flex; flex-wrap: wrap; align-items: center; margin: 10rem 0 6rem 0; }
+.ea-party-editor__actions > div { margin: 0 5rem 5rem 0; }
+.ea-party-editor__spacer { flex: 1; }
+
 /* ---------- developer drawer ---------- */
 
 .ea-dev { margin-top: 16rem; padding-top: 10rem; border-top: 1rem solid rgba(255, 255, 255, 0.12); }
@@ -190,3 +242,7 @@
 }
 
 .ea-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ea-stance { margin-top: 4rem; min-height: 30rem; font-size: 12rem; color: rgba(255, 255, 255, 0.78); }
+.ea-maprow > div:first-child { flex: 1; margin-right: 12rem; }
+.ea-tag { margin-left: 8rem; padding: 1rem 6rem; border-radius: 4rem; font-size: 11rem; font-weight: bold; text-transform: uppercase; color: #ffffff; background-color: rgba(255, 255, 255, 0.16); }

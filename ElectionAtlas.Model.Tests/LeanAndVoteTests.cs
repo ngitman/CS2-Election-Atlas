@@ -33,6 +33,17 @@ namespace ElectionAtlas.Model.Tests
         }
 
         [Fact]
+        public void Lean_AppliesStudentWeights()
+        {
+            var weights = new LeanWeights { StudentEconomic = -0.1f, StudentSocial = -0.2f };
+            var student = LeanModel.Lean(TestCity.Group(job: JobSector.Student), weights);
+            var commercial = LeanModel.Lean(TestCity.Group(job: JobSector.Commercial), weights);
+
+            Assert.Equal(weights.StudentEconomic - weights.CommercialEconomic, student.Economic - commercial.Economic, 4);
+            Assert.Equal(weights.StudentSocial - weights.CommercialSocial, student.Social - commercial.Social, 4);
+        }
+
+        [Fact]
         public void Lean_StaysInsideTheAxes_EvenWithExtremeWeights()
         {
             var w = new LeanWeights { WealthEconomicRichest = 5f, EducationSocialNone = 5f };

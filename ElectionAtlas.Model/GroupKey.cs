@@ -2,16 +2,16 @@ namespace ElectionAtlas.Model
 {
     /// <summary>
     /// Packs a voter group's identity into one int, so the in-game reader can add into flat arrays.
-    /// Layout: (((district * 2 + age) * 5 + education) * 4 + wealth) * 5 + job.
+    /// Layout: (((district * 2 + age) * 5 + education) * 4 + wealth) * 6 + job.
     /// </summary>
     public static class GroupKey
     {
         public const int AgeBands = 2;
         public const int EducationLevels = VoterGroup.EducationLevels;
         public const int WealthBands = VoterGroup.WealthBands;
-        public const int JobSectors = 5;
+        public const int JobSectors = 6;
 
-        /// <summary>Slots per district: 2 x 5 x 4 x 5 = 200.</summary>
+        /// <summary>Slots per district: 2 x 5 x 4 x 6 = 240.</summary>
         public const int SlotsPerDistrict = AgeBands * EducationLevels * WealthBands * JobSectors;
 
         public static int Encode(int district, AgeBand age, int education, int wealthBand, JobSector job)

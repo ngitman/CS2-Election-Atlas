@@ -1,7 +1,7 @@
 import React from "react";
 import { trigger } from "cs2/api";
 import { Districts, GROUP, PartyInfo } from "./bindings";
-import { monthLabel, pct } from "./format";
+import { count, monthLabel, pct } from "./format";
 
 export const Dot = ({ color, large }: { color: string; large?: boolean }) => (
   <div className={large ? "ea-dot ea-dot--lg" : "ea-dot"} style={{ backgroundColor: color }} />
@@ -33,11 +33,14 @@ export const StackBar = ({ parties, shares }: { parties: PartyInfo[]; shares: nu
     <div className="ea-legend">
       {parties.map((p, i) => (
         <div key={p.id} className="ea-legend__item">
-          <Dot color={p.color} />
-          <span>{p.name}</span>
-          <span className="ea-bold" style={{ marginLeft: "6rem" }}>
-            {pct(shares[i] ?? 0)}
-          </span>
+          <div className="ea-legend__line">
+            <Dot color={p.color} />
+            <span>{p.name}</span>
+            <span className="ea-bold" style={{ marginLeft: "6rem" }}>
+              {pct(shares[i] ?? 0)}
+            </span>
+          </div>
+          {p.votes !== undefined ? <div className="ea-muted ea-small ea-legend__votes">{`${count(p.votes)} votes`}</div> : null}
         </div>
       ))}
     </div>

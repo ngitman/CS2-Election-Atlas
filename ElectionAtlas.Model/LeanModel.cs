@@ -35,6 +35,10 @@ namespace ElectionAtlas.Model
                     economic += w.RetiredEconomic;
                     social += w.RetiredSocial;
                     break;
+                case JobSector.Student:
+                    economic += w.StudentEconomic;
+                    social += w.StudentSocial;
+                    break;
             }
 
             return new Position(economic, social); // clamps to -1..+1

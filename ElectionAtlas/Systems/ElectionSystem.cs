@@ -315,8 +315,7 @@ namespace ElectionAtlas.Systems
 
         private ElectionCadence Cadence => Mod.Settings?.Cadence ?? ElectionCadence.EveryYear;
 
-        public Party[] CurrentParties() =>
-            SampleParties.Get(Mod.Settings?.PartyLineup == PartyLineup.FourParties ? 4 : 2);
+        public Party[] CurrentParties() => Mod.Settings?.GetParties() ?? Setting.TwoPartyPreset;
 
         // ---------------------------------------------------------------- on demand (dev commands, UI)
 

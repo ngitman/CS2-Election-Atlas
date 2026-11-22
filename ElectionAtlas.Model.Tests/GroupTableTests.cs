@@ -27,7 +27,8 @@ namespace ElectionAtlas.Model.Tests
                 Assert.Equal((d, a, e, w, j), (d2, (int)a2, e2, w2, (int)j2));
             }
 
-            Assert.Equal(200, GroupKey.SlotsPerDistrict);
+            Assert.Equal(GroupKey.JobSectors, Enum.GetValues<JobSector>().Length);
+            Assert.Equal(240, GroupKey.SlotsPerDistrict);
         }
 
         [Fact]

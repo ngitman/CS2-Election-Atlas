@@ -47,7 +47,6 @@ export const DevSection = () => {
             <Cmd label="Reset" command="devReset" />
           </div>
           <div className="ea-actions" style={{ marginTop: "0" }}>
-            <Cmd label="Switch parties" command="devSwitchParties" />
             <Cmd label="Spike report" command="devSpikeReport" />
             <Cmd label="Export city CSV" command="devExportCity" />
             <Cmd label="Benchmark readers" command="devBenchmark" />

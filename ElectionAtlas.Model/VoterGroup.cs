@@ -28,6 +28,7 @@ namespace ElectionAtlas.Model
         public VoterGroup(int district, AgeBand age, int education, int wealthBand, JobSector job, int count, float avgHappiness)
         {
             if (district < 0) throw new ArgumentOutOfRangeException(nameof(district));
+            if (age != AgeBand.Adult && age != AgeBand.Elderly) throw new ArgumentOutOfRangeException(nameof(age));
             if (education < 0 || education >= EducationLevels) throw new ArgumentOutOfRangeException(nameof(education));
             if (wealthBand < 0 || wealthBand >= WealthBands) throw new ArgumentOutOfRangeException(nameof(wealthBand));
             if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));

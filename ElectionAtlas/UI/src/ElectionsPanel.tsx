@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { trigger, useValue } from "cs2/api";
-import { Panel } from "cs2/ui";
+import { Panel, Scrollable } from "cs2/ui";
 import { districts$, GROUP, history$, mapView$, overview$, panelOpen$, polls$ } from "./bindings";
 import { DevSection } from "./DevSection";
 import { DistrictPopup } from "./DistrictPopup";
 import { DistrictsTab } from "./DistrictsTab";
 import { GovernmentStrip } from "./GovernmentStrip";
-import { HistoryTab, PartiesTab, PollsTab } from "./OtherTabs";
+import { HistoryTab, PollsTab } from "./OtherTabs";
+import { PartiesTab } from "./PartiesTab";
 import { MapLegend } from "./MapLegend";
 
 type Tab = "districts" | "history" | "polls" | "parties";
@@ -46,14 +47,16 @@ export const ElectionsPanel = () => {
             ))}
           </div>
 
-          <div style={{ maxHeight: "560rem", overflowY: "auto" }}>
+          <Scrollable vertical style={{ maxHeight: "560rem" }}>
             {tab === "districts" ? (
               <DistrictsTab d={districts} openId={districtId} onOpen={(id) => setDistrictId(id === districtId ? null : id)} />
             ) : null}
             {tab === "history" ? <HistoryTab h={history} shownIndex={districts?.index} onShow={() => setTab("districts")} /> : null}
             {tab === "polls" ? <PollsTab p={polls} /> : null}
-            {tab === "parties" ? <PartiesTab o={overview} /> : null}
-          </div>
+            <div style={{ display: tab === "parties" ? undefined : "none" }}>
+              <PartiesTab governingId={overview?.governing?.id} />
+            </div>
+          </Scrollable>
 
           <DevSection />
         </div>

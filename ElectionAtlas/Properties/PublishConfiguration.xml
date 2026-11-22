@@ -2,13 +2,14 @@
 	<!-- Filled in automatically after the first publish; needed to update an existing mod -->
 	<ModId Value="" />
 	<DisplayName Value="Election Atlas" />
-	<ShortDescription Value="Election results for every district: exact numbers and maps for winner, margin, turnout and swing. Lightweight, no dependencies." />
+	<ShortDescription Value="Simulate district elections with custom parties, monthly polls, and a results map." />
 	<LongDescription>
 Once your city has a City Hall, it holds elections on a schedule you choose, and every district reports its own result. Turnout and vote choice come from the citizens who actually live there: their age, education, wealth and job.
 
-- A results map colored by winner, faded by how close the race was, plus turnout, swing, party strength and approval views
-- A card for every district with votes, shares, turnout, margin and swing since the last election
-- Every past election kept, so you can flick back through your city's political history
+- A district results map colored by winner and shaded by margin
+- Votes, shares, turnout, and approval for your city's districts
+- A party editor for names, colors, and political positions
+- An election archive that saves with your city by default
 - Monthly polls between elections, based on the game's own happiness
 
 No other mods required, and nothing changes traffic or time.
@@ -17,6 +18,6 @@ No other mods required, and nothing changes traffic or time.
 	<Tag Value="Code Mod" />
 	<ModVersion Value="0.1.0" />
 	<GameVersion Value="1.6.*" />
-	<ChangeLog Value="Phase 1 scaffold: settings and an empty Elections panel." />
+	<ChangeLog Value="Initial release with district elections, editable parties, monthly polls, election history, and a results map." />
 	<ExternalLink Type="github" Url="https://github.com/ngitman/CS2-Election-Atlas" />
 </Publish>

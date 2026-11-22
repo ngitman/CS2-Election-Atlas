@@ -16,6 +16,22 @@ export interface PartyInfo {
   won?: number;
 }
 
+export interface EditorParty extends PartyInfo {
+  economic: number;
+  social: number;
+}
+
+export interface PartyEditorState {
+  revision: number;
+  message: string;
+  minParties: number;
+  maxParties: number;
+  maxNameLength: number;
+  parties: EditorParty[];
+  twoPartyPreset: EditorParty[];
+  fourPartyPreset: EditorParty[];
+}
+
 export interface ElectionSummary {
   number: number;
   month: number;
@@ -90,8 +106,13 @@ export const overview$ = bindValue<Overview | null>(GROUP, "overview", null);
 export const districts$ = bindValue<Districts | null>(GROUP, "districts", null);
 export const history$ = bindValue<History | null>(GROUP, "history", null);
 export const polls$ = bindValue<Polls | null>(GROUP, "polls", null);
+export const partyEditor$ = bindValue<PartyEditorState | null>(GROUP, "partyEditor", null);
 /** The panel is collapsed to the map legend and districts are colored by result. */
 export const mapView$ = bindValue<boolean>(GROUP, "mapView", false);
 
 /** A party's share of a district's votes. The one place this is computed in the UI. */
 export const partyShare = (d: DistrictView, party: number): number => (d.votes > 0 ? (d.partyVotes[party] ?? 0) / d.votes : 0);
+
+/** Party indexes for a district, most votes first. Shared by the popup and the in-city section. */
+export const byVotes = (d: DistrictView, partyCount: number): number[] =>
+  Array.from({ length: partyCount }, (_, i) => i).sort((a, b) => (d.partyVotes[b] ?? 0) - (d.partyVotes[a] ?? 0));

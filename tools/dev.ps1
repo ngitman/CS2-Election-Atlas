@@ -7,8 +7,8 @@
   .\tools\dev.ps1 -Restart       # close the running game first
   .\tools\dev.ps1 -NoLaunch      # build + deploy only
   .\tools\dev.ps1 -NoBuild       # just launch
-  .\tools\dev.ps1 -Flags '-continuelastsave'   # pass arguments through Steam (it asks you to allow them)
-  # Usual flags go in Steam's launch options: -continuelastsave -noSplash -developerMode --uiDeveloperMode
+  .\tools\dev.ps1 -Flags '-noSplash'   # pass arguments through Steam (it asks you to allow them)
+  # Usual flags go in Steam's launch options: -noSplash -developerMode --uiDeveloperMode
 #>
 param(
     [switch]$Restart,
@@ -16,7 +16,7 @@ param(
     [switch]$NoLaunch,
     [switch]$SkipUI,
     # Launch options belong in Steam (Library > Cities: Skylines II > Properties > Launch Options):
-    #   -continuelastsave -noSplash -developerMode --uiDeveloperMode
+    #   -noSplash -developerMode --uiDeveloperMode
     # --uiDeveloperMode hot-reloads the UI and opens the UI debugger on http://localhost:9444; pair it with
     # `npm run dev` in ElectionAtlas\UI (or -Watch). -Flags passes extra arguments through Steam instead,
     # which makes Steam ask you to allow them.

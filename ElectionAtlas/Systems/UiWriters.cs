@@ -60,6 +60,14 @@ namespace ElectionAtlas.Systems
             w.TypeEnd();
         }
 
+        public static void PartyList(this IJsonWriter w, string name, IReadOnlyList<Party> parties)
+        {
+            w.PropertyName(name);
+            w.ArrayBegin((uint)parties.Count);
+            foreach (var party in parties) w.Party(party.Id, party.Name, party.Color, party.Position);
+            w.ArrayEnd();
+        }
+
         /// <summary>One district: its result in an election and how it feels about the government now.</summary>
         public static void District(this IJsonWriter w, DistrictView d)
         {

@@ -1,7 +1,7 @@
 import React from "react";
 import { camera, selectedInfo } from "cs2/bindings";
 import { Panel } from "cs2/ui";
-import { Districts, Overview, partyShare } from "./bindings";
+import { Districts, Overview, partyShare, byVotes } from "./bindings";
 import { approvalPct, count, monthLabel, pct, points } from "./format";
 import { InfoLine, ShareBar, Sparkline } from "./parts";
 
@@ -43,7 +43,8 @@ export const DistrictPopup = ({ d, o, id, onClose }: { d: Districts | null; o: O
           <div className="ea-hero__caption ea-muted">Nobody voted here in election {d.number}.</div>
         )}
 
-        {parties.map((p, i) => {
+        {byVotes(district, parties.length).map((i) => {
+          const p = parties[i];
           return <ShareBar key={p.id} name={p.name} color={p.color} share={partyShare(district, i)} suffix={`${count(district.partyVotes[i])} votes`} />;
         })}
 

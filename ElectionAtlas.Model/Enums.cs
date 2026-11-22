@@ -1,6 +1,6 @@
 namespace ElectionAtlas.Model
 {
-    /// <summary>Voting-age bands. The game only tracks Adult and Elderly for anyone old enough to vote.</summary>
+    /// <summary>The game's adult and elderly age bands are eligible to vote.</summary>
     public enum AgeBand
     {
         Adult,
@@ -14,6 +14,7 @@ namespace ElectionAtlas.Model
         Office,
         Unemployed,
         Retired,
+        Student,
     }
 
     /// <summary>Who governs after an election.</summary>

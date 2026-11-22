@@ -75,6 +75,8 @@ namespace ElectionAtlas.Model
         public float UnemployedSocial = 0f;
         public float RetiredEconomic = 0f;
         public float RetiredSocial = 0f;
+        public float StudentEconomic = -0.1f;
+        public float StudentSocial = -0.1f;
     }
 
     /// <summary>Terms of the turnout curve, in log-odds. The intercept is solved per election to hit the preset's target.</summary>

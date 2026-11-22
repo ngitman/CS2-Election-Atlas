@@ -1,6 +1,6 @@
 import React from "react";
 import { PanelSection, PanelSectionRow } from "cs2/ui";
-import { DistrictView, ElectionSummary, partyShare } from "./bindings";
+import { DistrictView, ElectionSummary, partyShare, byVotes } from "./bindings";
 import { approvalPct, count, monthLabel, pct, points } from "./format";
 import { Dot } from "./parts";
 
@@ -28,32 +28,27 @@ export const DistrictSection = (props: DistrictSectionProps) => {
     <PanelSection>
       <PanelSectionRow uppercase left="Election" right={e ? monthLabel(e.month) : "No election yet"} />
       {d.profile ? <PanelSectionRow left="Profile" right={d.profile} /> : null}
-      {e && winner && d.votes > 0 ? (
-        <PanelSectionRow
-          left={
-            <div className="ea-party">
-              <Dot color={winner.color} />
-              {`${winner.name} won`}
-            </div>
-          }
-          right={`${pct(d.winnerShare)}, by ${points(d.margin)}`}
-        />
-      ) : null}
       {e
-        ? parties.map((p, i) => (
-            <PanelSectionRow
-              key={p.id}
-              subRow
-              left={
-                <div className="ea-party">
-                  <Dot color={p.color} />
-                  {p.name}
-                </div>
-              }
-              right={pct(partyShare(d, i))}
-            />
-          ))
+        ? byVotes(d, parties.length).map((i) => {
+            // The winner is first (most votes) and set apart by weight and a tag, not a separate "won" row.
+            const won = d.votes > 0 && i === d.winner;
+            return (
+              <PanelSectionRow
+                key={parties[i].id}
+                subRow={!won}
+                left={
+                  <div className={won ? "ea-party ea-bold" : "ea-party"}>
+                    <Dot color={parties[i].color} />
+                    {parties[i].name}
+                    {won ? <span className="ea-tag">Winner</span> : null}
+                  </div>
+                }
+                right={<span className={won ? "ea-bold" : ""}>{`${pct(partyShare(d, i))} · ${count(d.partyVotes[i])}`}</span>}
+              />
+            );
+          })
         : null}
+      {e && winner && d.votes > 0 ? <PanelSectionRow subRow left="Margin" right={points(d.margin)} /> : null}
       {e ? <PanelSectionRow left="Turnout" right={`${pct(d.turnout)} of ${count(d.eligible)}`} /> : null}
       <PanelSectionRow
         left={props.governing ? `Approval of ${props.governing}` : "Approval"}

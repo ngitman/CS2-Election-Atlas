@@ -44,6 +44,7 @@ namespace ElectionAtlas.Systems
             AddBinding(m_Districts = new RawValueBinding(kGroup, "districts", Guarded("districts", WriteDistricts)));
             AddBinding(m_History = new RawValueBinding(kGroup, "history", Guarded("history", WriteHistory)));
             AddBinding(m_Polls = new RawValueBinding(kGroup, "polls", Guarded("polls", WritePolls)));
+            BindPartyEditor();
 
             AddBinding(new TriggerBinding(kGroup, "togglePanel", TogglePanel));
             AddBinding(new TriggerBinding(kGroup, "closePanel", ClosePanel));
@@ -84,6 +85,8 @@ namespace ElectionAtlas.Systems
 
             if (!m_PanelOpen.value)
                 return;
+
+            RefreshPartyEditor();
 
             // Rebuild only when something shown has changed.
             long key = m_Elections.DataVersion;
@@ -189,13 +192,10 @@ namespace ElectionAtlas.Systems
 
             w.PropertyName("governing");
             if (governing != null) w.Party(governing.Id, governing.Name, governing.Color);
-            else if (ledger.GoverningPartyId != null) w.Party(ledger.GoverningPartyId, ledger.GoverningPartyId, 0x888888);
+            else if (ledger.Archive.Latest?.GoverningParty is PartySnapshot elected) w.Party(elected.Id, elected.Name, elected.Color);
             else w.WriteNull();
 
-            w.PropertyName("parties");
-            w.ArrayBegin((uint)parties.Length);
-            foreach (var p in parties) w.Party(p.Id, p.Name, p.Color, p.Position);
-            w.ArrayEnd();
+            w.PartyList("parties", parties);
 
             w.PropertyName("poll");
             if (poll != null)

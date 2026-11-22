@@ -21,6 +21,7 @@ namespace ElectionAtlas.Model.Tests
             Assert.Equal(table.DistrictCount, back.DistrictCount);
             Assert.Equal(table.TotalVoters, back.TotalVoters);
             Assert.Equal(table.Groups.Count, back.Groups.Count);
+            Assert.Contains(back.Groups, g => g.Age == AgeBand.Adult && g.Job == JobSector.Student);
             Assert.Equal(names, names2);
             Assert.Equal("Test City, 2026-11-21", source);
 
@@ -61,6 +62,15 @@ namespace ElectionAtlas.Model.Tests
             string csv = GroupTableCsv.Magic + "\n0,Adult,2,1,Commercial,10,50\n0,Adult,9,1,Commercial,10,50\n";
             var ex = Assert.Throws<FormatException>(() => GroupTableCsv.Read(new StringReader(csv), out _, out _));
             Assert.Contains("Line 3", ex.Message);
+        }
+
+        [Fact]
+        public void Read_RejectsUnsupportedAgeBandNumbers()
+        {
+            string csv = GroupTableCsv.Magic + "\n0,2,2,1,Commercial,10,50\n";
+            var ex = Assert.Throws<FormatException>(() => GroupTableCsv.Read(new StringReader(csv), out _, out _));
+            Assert.Contains("Line 2", ex.Message);
+            Assert.Contains("age", ex.Message);
         }
     }
 }
