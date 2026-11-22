@@ -6,6 +6,7 @@ declare module "cs2/modding" {
   import type { ComponentType } from "react";
   export interface ModuleRegistry {
     append(location: string, component: ComponentType<any>): void;
+    extend(modulePath: string, exportName: string, extend: (current: any) => any): void;
   }
   export type ModRegistrar = (moduleRegistry: ModuleRegistry) => void;
 }
@@ -41,4 +42,40 @@ declare module "cs2/ui" {
     className?: string;
   }
   export const FloatingButton: (props: FloatingButtonProps) => JSX.Element;
+
+  export interface ButtonProps {
+    variant?: "flat" | "primary" | "round" | "menu" | "icon" | "floating" | "text" | "default";
+    selected?: boolean;
+    disabled?: boolean;
+    onSelect?: () => void;
+    className?: string;
+    style?: CSSProperties;
+    children?: ReactNode;
+  }
+  export const Button: (props: ButtonProps) => JSX.Element;
+
+  // The game's InfoSection / InfoRow (same components its own info panels use).
+  export const PanelSection: (props: { className?: string; children?: ReactNode }) => JSX.Element;
+  export const PanelSectionRow: (props: {
+    left?: ReactNode;
+    right?: ReactNode;
+    uppercase?: boolean;
+    subRow?: boolean;
+    className?: string;
+  }) => JSX.Element;
+}
+
+declare module "cs2/bindings" {
+  import type { ValueBinding } from "cs2/api";
+  export interface Entity {
+    index: number;
+    version: number;
+  }
+  export namespace selectedInfo {
+    const selectEntity: (entity: Entity) => void;
+    const selectedEntity$: ValueBinding<Entity>;
+  }
+  export namespace camera {
+    function focusEntity(entity: Entity): void;
+  }
 }

@@ -16,4 +16,9 @@
 	<ItemGroup>
 		<ProjectReference Include="..\ElectionAtlas.Model\ElectionAtlas.Model.csproj" />
 	</ItemGroup>
+
+	<!-- Real cities exported from the game, replayed by RealCityReplayTests -->
+	<ItemGroup>
+		<None Include="Cities\**\*.csv" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
 </Project>

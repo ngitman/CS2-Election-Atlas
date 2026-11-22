@@ -1,34 +1,29 @@
-#if DEBUG
+#if DEV_TOOLS
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Colossal.Logging;
-using Colossal.Serialization.Entities;
+using ElectionAtlas.Dev;
 using ElectionAtlas.Model;
 using Game;
-using Game.Agents;
-using Game.Areas;
 using Game.Buildings;
 using Game.Citizens;
 using Game.Common;
 using Game.Companies;
-using Game.Economy;
 using Game.Prefabs;
 using Game.Simulation;
 using Game.Tools;
-using Game.UI;
 using Unity.Collections;
 using Unity.Entities;
 using Purpose = Colossal.Serialization.Entities.Purpose;
-using Student = Game.Citizens.Student;
 
 namespace ElectionAtlas.Diagnostics
 {
     /// <summary>
-    /// Debug builds only. Answers the in-game spikes in one play session and writes everything to
+    /// Dev builds only. Answers the in-game spikes in one play session and writes everything to
     /// ElectionAtlas.Spikes.log. Runs on the main thread with plain EntityManager reads: slow, but it only
-    /// runs at load, on month ticks and every 6 months, and never ships in Release builds.
+    /// runs at load, every 6 in-game months, and on demand from the dev commands.
     /// </summary>
     public partial class SpikeLoggerSystem : GameSystemBase
     {
@@ -38,16 +33,13 @@ namespace ElectionAtlas.Diagnostics
         private const int kFullReportEveryMonths = 6;
 
         private PrefabSystem m_PrefabSystem;
-        private NameSystem m_NameSystem;
-        private SimulationSystem m_SimulationSystem;
         private TimeSystem m_TimeSystem;
+        private SimulationSystem m_SimulationSystem;
+        private MainThreadVoterReader m_Reader;
 
         private EntityQuery m_AdminQuery;
         private EntityQuery m_AdminPrefabQuery;
         private EntityQuery m_WorkerQuery;
-        private EntityQuery m_HouseholdQuery;
-        private EntityQuery m_DistrictQuery;
-        private EntityQuery m_TimeDataQuery;
 
         private bool m_InGame;
         private bool m_PendingFullReport;
@@ -64,12 +56,11 @@ namespace ElectionAtlas.Diagnostics
             base.OnCreate();
 
             m_PrefabSystem = World.GetOrCreateSystemManaged<PrefabSystem>();
-            m_NameSystem = World.GetOrCreateSystemManaged<NameSystem>();
-            m_SimulationSystem = World.GetOrCreateSystemManaged<SimulationSystem>();
             m_TimeSystem = World.GetOrCreateSystemManaged<TimeSystem>();
+            m_SimulationSystem = World.GetOrCreateSystemManaged<SimulationSystem>();
+            m_Reader = new MainThreadVoterReader(World);
 
             var notTempOrDeleted = new[] { ComponentType.ReadOnly<Temp>(), ComponentType.ReadOnly<Deleted>() };
-
             m_AdminQuery = GetEntityQuery(new EntityQueryDesc
             {
                 All = new[] { ComponentType.ReadOnly<AdminBuilding>(), ComponentType.ReadOnly<Building>(), ComponentType.ReadOnly<PrefabRef>() },
@@ -81,27 +72,8 @@ namespace ElectionAtlas.Diagnostics
                 All = new[] { ComponentType.ReadOnly<Worker>(), ComponentType.ReadOnly<Citizen>() },
                 None = notTempOrDeleted,
             });
-            m_HouseholdQuery = GetEntityQuery(new EntityQueryDesc
-            {
-                All = new[]
-                {
-                    ComponentType.ReadOnly<Household>(), ComponentType.ReadOnly<PropertyRenter>(),
-                    ComponentType.ReadOnly<HouseholdCitizen>(), ComponentType.ReadOnly<Resources>(),
-                },
-                None = new[]
-                {
-                    ComponentType.ReadOnly<TouristHousehold>(), ComponentType.ReadOnly<CommuterHousehold>(),
-                    ComponentType.ReadOnly<MovingAway>(), ComponentType.ReadOnly<Temp>(), ComponentType.ReadOnly<Deleted>(),
-                },
-            });
-            m_DistrictQuery = GetEntityQuery(new EntityQueryDesc
-            {
-                All = new[] { ComponentType.ReadOnly<District>() },
-                None = notTempOrDeleted,
-            });
-            m_TimeDataQuery = GetEntityQuery(ComponentType.ReadOnly<TimeData>());
 
-            Log.Info("Spike logger created (Debug build). Load a city and let it run for an in-game year.");
+            Log.Info("Spike logger created (dev build). Load a city and let it run for an in-game year.");
             try { LogModelAssembly(); }
             catch (Exception ex) { Log.Error($"[spike 8] ElectionAtlas.Model failed to load: {ex.GetType().Name}: {ex.Message}"); }
         }
@@ -140,6 +112,14 @@ namespace ElectionAtlas.Diagnostics
                 m_Failed = true; // stop after the first failure instead of flooding the log
                 Log.Error($"Spike logger stopped after an error: {ex}");
             }
+        }
+
+        /// <summary>Runs a full report immediately, even while paused. Returns how long it took.</summary>
+        public long RunFullReportNow(string reason)
+        {
+            var sw = Stopwatch.StartNew();
+            FullReport(reason);
+            return sw.ElapsedMilliseconds;
         }
 
         // ---------------------------------------------------------------- reports
@@ -202,8 +182,8 @@ namespace ElectionAtlas.Diagnostics
                 foreach (var e in entities)
                 {
                     var prefab = EntityManager.GetComponentData<PrefabRef>(e).m_Prefab;
-                    string district = EntityManager.HasComponent<CurrentDistrict>(e)
-                        ? DistrictName(EntityManager.GetComponentData<CurrentDistrict>(e).m_District)
+                    string district = EntityManager.HasComponent<Game.Areas.CurrentDistrict>(e)
+                        ? m_Reader.DistrictName(EntityManager.GetComponentData<Game.Areas.CurrentDistrict>(e).m_District)
                         : "(no CurrentDistrict)";
                     Log.Info($"[spike 1]   entity {e.Index}:{e.Version} prefab='{PrefabName(prefab)}' district={district}");
                 }
@@ -271,161 +251,51 @@ namespace ElectionAtlas.Diagnostics
             return parts.Count == 0 ? "none" : string.Join("+", parts);
         }
 
-        private JobSector SectorOf(Entity workplace)
-        {
-            if (workplace == Entity.Null || !EntityManager.Exists(workplace)) return JobSector.Unemployed;
-            if (EntityManager.HasComponent<OfficeCompany>(workplace)) return JobSector.Office;
-            if (EntityManager.HasComponent<IndustrialCompany>(workplace)) return JobSector.Industrial;
-            return JobSector.Commercial; // commercial companies, and for now city-service jobs (spike 4 decides)
-        }
-
         // Spikes 6 and 7, district sanity checks for phase 3, and a preview election on the real city.
         private void ReportCitizensAndPreviewElection()
         {
-            var sw = Stopwatch.StartNew();
-            uint frame = m_SimulationSystem.frameIndex;
-            bool hasTime = !m_TimeDataQuery.IsEmptyIgnoreFilter;
-            TimeData timeData = hasTime ? m_TimeDataQuery.GetSingleton<TimeData>() : default;
+            var r = m_Reader.Read(collectAges: true);
+            var w = r.WealthSorted;
 
-            // Districts: index 0..n-1 by entity, index n = "Unassigned".
-            var districtIndex = new Dictionary<Entity, int>();
-            var districtNames = new List<string>();
-            using (var districts = m_DistrictQuery.ToEntityArray(Allocator.Temp))
+            Log.Info($"[spike 6] households={r.Households} wealth min={P(w, 0)} p10={P(w, 0.10)} p25={r.WealthCuts[0]} p50={r.WealthCuts[1]} p75={r.WealthCuts[2]} p90={P(w, 0.90)} max={P(w, 1)}");
+            Log.Info($"[spike 6] suggested wealth band cut points (quartiles): {r.WealthCuts[0]}, {r.WealthCuts[1]}, {r.WealthCuts[2]}");
+
+            Log.Info($"[spike 7] residents by age: {string.Join(", ", r.ByAge.Select(kv => $"{kv.Key}={kv.Value}"))}; skipped tourists={r.Tourists} commuters={r.Commuters}; adult students without a job={r.AdultStudents}");
+            foreach (var kv in r.AgeDays.OrderBy(k => k.Key))
             {
-                foreach (var d in districts)
-                {
-                    districtIndex[d] = districtNames.Count;
-                    districtNames.Add(DistrictName(d));
-                }
-            }
-            int unassigned = districtNames.Count;
-            districtNames.Add("Unassigned");
-            int districtCount = districtNames.Count;
-
-            using (var households = m_HouseholdQuery.ToEntityArray(Allocator.Temp))
-            {
-                // Pass 1: wealth per household (spike 6), cut into quartiles for the bands.
-                var wealth = new int[households.Length];
-                for (int i = 0; i < households.Length; i++)
-                {
-                    var hh = EntityManager.GetComponentData<Household>(households[i]);
-                    var resources = EntityManager.GetBuffer<Resources>(households[i], true);
-                    wealth[i] = EconomyUtils.GetHouseholdTotalWealth(hh, resources);
-                }
-
-                var sorted = (int[])wealth.Clone();
-                Array.Sort(sorted);
-                int[] cuts = { Percentile(sorted, 0.25), Percentile(sorted, 0.50), Percentile(sorted, 0.75) };
-                Log.Info($"[spike 6] households={sorted.Length} wealth min={Percentile(sorted, 0)} p10={Percentile(sorted, 0.10)} p25={cuts[0]} p50={cuts[1]} p75={cuts[2]} p90={Percentile(sorted, 0.90)} max={Percentile(sorted, 1)}");
-                Log.Info($"[spike 6] suggested wealth band cut points (quartiles): {cuts[0]}, {cuts[1]}, {cuts[2]}");
-
-                // Pass 2: every resident (spike 7) and the voter-group slots for the preview election.
-                var counts = new int[districtCount * GroupKey.SlotsPerDistrict];
-                var happiness = new long[counts.Length];
-                var ageDays = new Dictionary<CitizenAge, List<float>>();
-                var byAge = new Dictionary<CitizenAge, int>();
-                var residentsByDistrict = new int[districtCount];
-                var happinessByDistrict = new long[districtCount];
-                int tourists = 0, commuters = 0, students = 0, voters = 0;
-
-                for (int i = 0; i < households.Length; i++)
-                {
-                    var property = EntityManager.GetComponentData<PropertyRenter>(households[i]).m_Property;
-                    int district = unassigned;
-                    if (property != Entity.Null && EntityManager.HasComponent<CurrentDistrict>(property))
-                    {
-                        var d = EntityManager.GetComponentData<CurrentDistrict>(property).m_District;
-                        if (d != Entity.Null && districtIndex.TryGetValue(d, out int idx)) district = idx;
-                    }
-
-                    int band = wealth[i] <= cuts[0] ? 0 : wealth[i] <= cuts[1] ? 1 : wealth[i] <= cuts[2] ? 2 : 3;
-
-                    var members = EntityManager.GetBuffer<HouseholdCitizen>(households[i], true);
-                    for (int m = 0; m < members.Length; m++)
-                    {
-                        var citizenEntity = members[m].m_Citizen;
-                        if (!EntityManager.Exists(citizenEntity) || !EntityManager.HasComponent<Citizen>(citizenEntity)) continue;
-
-                        var c = EntityManager.GetComponentData<Citizen>(citizenEntity);
-                        if ((c.m_State & CitizenFlags.Tourist) != 0) { tourists++; continue; }
-                        if ((c.m_State & CitizenFlags.Commuter) != 0) { commuters++; continue; }
-
-                        var age = c.GetAge();
-                        Increment(byAge, age);
-                        if (hasTime)
-                        {
-                            if (!ageDays.TryGetValue(age, out var list)) ageDays[age] = list = new List<float>();
-                            list.Add(c.GetAgeInDays(frame, timeData));
-                        }
-
-                        if (age != CitizenAge.Adult && age != CitizenAge.Elderly) continue;
-
-                        voters++;
-                        residentsByDistrict[district]++;
-                        happinessByDistrict[district] += c.Happiness;
-
-                        JobSector job;
-                        if (EntityManager.HasComponent<Worker>(citizenEntity))
-                            job = SectorOf(EntityManager.GetComponentData<Worker>(citizenEntity).m_Workplace);
-                        else if (age == CitizenAge.Elderly)
-                            job = JobSector.Retired;
-                        else
-                        {
-                            if (EntityManager.HasComponent<Student>(citizenEntity)) students++;
-                            job = JobSector.Unemployed;
-                        }
-
-                        int edu = Math.Min(4, Math.Max(0, c.GetEducationLevel()));
-                        var ageBand = age == CitizenAge.Elderly ? AgeBand.Elderly : AgeBand.Adult;
-                        int key = GroupKey.Encode(district, ageBand, edu, band, job);
-                        counts[key]++;
-                        happiness[key] += c.Happiness;
-                    }
-                }
-
-                Log.Info($"[spike 7] residents by age: {string.Join(", ", byAge.Select(kv => $"{kv.Key}={kv.Value}"))}; skipped tourists={tourists} commuters={commuters}; adult students without a job={students}");
-                foreach (var kv in ageDays.OrderBy(k => k.Key))
-                {
-                    var days = kv.Value;
-                    days.Sort();
-                    Log.Info($"[spike 7]   {kv.Key} age in days: min={P(days, 0):0.0} p5={P(days, 0.05):0.0} p50={P(days, 0.5):0.0} p95={P(days, 0.95):0.0} max={P(days, 1):0.0}");
-                }
-
-                Log.Info($"[phase 3] voting-age residents={voters} in {districtCount - 1} district(s) + Unassigned");
-                for (int d = 0; d < districtCount; d++)
-                {
-                    if (residentsByDistrict[d] == 0) continue;
-                    Log.Info($"[phase 3]   {districtNames[d]}: voters={residentsByDistrict[d]} avgHappiness={(double)happinessByDistrict[d] / residentsByDistrict[d]:0.0}");
-                }
-
-                PreviewElection(districtCount, districtNames, counts, happiness);
+                var days = kv.Value;
+                days.Sort();
+                Log.Info($"[spike 7]   {kv.Key} age in days: min={P(days, 0):0.0} p5={P(days, 0.05):0.0} p50={P(days, 0.5):0.0} p95={P(days, 0.95):0.0} max={P(days, 1):0.0}");
             }
 
-            Log.Info($"[timing] citizen pass took {sw.ElapsedMilliseconds} ms (main thread, unoptimized; the real reader is a Burst job)");
+            Log.Info($"[phase 3] voting-age residents={r.Voters} in {r.DistrictNames.Length - 1} district(s) + Unassigned");
+            for (int d = 0; d < r.DistrictNames.Length; d++)
+            {
+                if (r.VotersByDistrict[d] == 0) continue;
+                Log.Info($"[phase 3]   {r.DistrictNames[d]}: voters={r.VotersByDistrict[d]} avgHappiness={(double)r.HappinessByDistrict[d] / r.VotersByDistrict[d]:0.0}");
+            }
+
+            PreviewElection(r);
+            Log.Info($"[timing] citizen pass took {r.ElapsedMs} ms (main thread, unoptimized; the real reader is a Burst job)");
         }
 
-        private void PreviewElection(int districtCount, List<string> districtNames, int[] counts, long[] happiness)
+        private static void PreviewElection(VoterReading r)
         {
-            var table = GroupTable.FromSlots(districtCount, counts, happiness);
-            var parties = new[]
-            {
-                new Party("left", "Left", 0xCC3333, new Position(-0.6f, -0.4f)),
-                new Party("right", "Right", 0x3355CC, new Position(0.6f, 0.4f)),
-            };
+            var parties = DevParties.Default;
             var cfg = new ModelConfig();
 
             var sw = Stopwatch.StartNew();
-            var result = ElectionModel.RunElection(table, parties, null, GoverningRule.PopularVote, TurnoutPreset.UsGeneral, cfg, 1);
-            var poll = ElectionModel.RunPoll(table, parties, null, cfg);
+            var result = ElectionModel.RunElection(r.Table, parties, null, GoverningRule.PopularVote, TurnoutPreset.UsGeneral, cfg, 1);
+            var poll = ElectionModel.RunPoll(r.Table, parties, null, cfg);
             long ms = sw.ElapsedMilliseconds;
 
-            Log.Info($"[preview] {table.Groups.Count} voter groups, {table.TotalVoters} voters; model ran in {ms} ms");
-            Log.Info($"[preview] citywide turnout={result.Turnout:P1} Left={result.Shares[0]:P1} Right={result.Shares[1]:P1} governing={result.GoverningPartyId} approval(happiness)={poll.Approval:0.0}");
+            Log.Info($"[preview] {r.Table.Groups.Count} voter groups, {r.Table.TotalVoters} voters; model ran in {ms} ms");
+            Log.Info($"[preview] citywide turnout={result.Turnout:P1} {parties[0].Name}={result.Shares[0]:P1} {parties[1].Name}={result.Shares[1]:P1} governing={result.GoverningPartyId} approval(happiness)={poll.Approval:0.0}");
             foreach (var d in result.Districts)
             {
                 if (d.Eligible == 0) continue;
                 string winner = d.WinnerIndex >= 0 ? parties[d.WinnerIndex].Name : "-";
-                Log.Info($"[preview]   {districtNames[d.District]}: winner={winner} margin={d.Margin * 100f:0.0} pts turnout={d.Turnout:P1} votes L={d.PartyVotes[0]} R={d.PartyVotes[1]}");
+                Log.Info($"[preview]   {r.DistrictNames[d.District]}: winner={winner} margin={d.Margin * 100f:0.0} pts turnout={d.Turnout:P1} votes {parties[0].Name}={d.PartyVotes[0]} {parties[1].Name}={d.PartyVotes[1]}");
             }
         }
 
@@ -436,30 +306,15 @@ namespace ElectionAtlas.Diagnostics
             return m_PrefabSystem.TryGetPrefab<PrefabBase>(prefab, out var p) && p != null ? p.name : $"<prefab {prefab.Index}>";
         }
 
-        private string DistrictName(Entity district)
-        {
-            if (district == Entity.Null) return "(none)";
-            try { return m_NameSystem.GetRenderedLabelName(district); }
-            catch { return $"<district {district.Index}>"; }
-        }
-
         private static void Increment<T>(Dictionary<T, int> map, T key)
         {
             map.TryGetValue(key, out int n);
             map[key] = n + 1;
         }
 
-        private static int Percentile(int[] sorted, double p)
-        {
-            if (sorted.Length == 0) return 0;
-            return sorted[(int)Math.Round(p * (sorted.Length - 1))];
-        }
+        private static int P(int[] sorted, double p) => sorted.Length == 0 ? 0 : sorted[(int)Math.Round(p * (sorted.Length - 1))];
 
-        private static float P(List<float> sorted, double p)
-        {
-            if (sorted.Count == 0) return 0f;
-            return sorted[(int)Math.Round(p * (sorted.Count - 1))];
-        }
+        private static float P(List<float> sorted, double p) => sorted.Count == 0 ? 0f : sorted[(int)Math.Round(p * (sorted.Count - 1))];
     }
 }
 #endif

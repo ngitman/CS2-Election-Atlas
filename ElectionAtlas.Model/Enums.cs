@@ -34,4 +34,19 @@ namespace ElectionAtlas.Model
         UkGeneral,
         Nordic,
     }
+
+    /// <summary>How often the city holds an election, in in-game years.</summary>
+    public enum ElectionCadence
+    {
+        EveryYear,
+        EveryTwoYears,
+        EveryFourYears,
+    }
+
+    /// <summary>The test party lineup used until the party editor exists.</summary>
+    public enum PartyLineup
+    {
+        TwoParties,
+        FourParties,
+    }
 }

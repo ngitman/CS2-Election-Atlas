@@ -24,6 +24,14 @@ namespace ElectionAtlas.Model
         /// <summary>Largest random shift of an election's citywide turnout, as a fraction (0.03 = 3 points).</summary>
         public float TurnoutVariation = 0.03f;
 
+        // Government shutdown and low City Hall efficiency (see GovernmentCondition).
+        public float ShutdownApprovalPerMonth = 4f;
+        public float ShutdownApprovalCap = 30f;
+        public float LowEfficiencyApprovalPoints = 10f;
+        public float ShutdownIncumbentPerMonth = 0.15f;
+        public float ShutdownIncumbentCap = 1.2f;
+        public float LowEfficiencyIncumbent = 0.3f;
+
         // Approximate real-world averages; check against official sources before release.
         public TurnoutPresetData UsMunicipal = new TurnoutPresetData(0.25f, 1.2f);
         public TurnoutPresetData UsGeneral = new TurnoutPresetData(0.65f, 1.0f);

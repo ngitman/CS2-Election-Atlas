@@ -7,6 +7,7 @@ Election results for every district of your city, as exact numbers and as maps. 
 ## Status
 
 - **Phase 1 (scaffold):** done and tested in game (1.6.4): the mod and model load, Burst code loads, the settings show in Options, and the top-left button opens the Elections panel.
+- **Phases 3–5 (reader, elections, polls, saving) and most of phase 6 (panel tabs):** built, not yet tested in game; see [TESTING.md](TESTING.md). The reader runs on the main thread in 16 slices (a Burst job can replace it later). A City Hall shutdown doesn't stop elections; it costs the governing party approval and votes. Saving election data is an experimental, off-by-default option. Not built yet: the map overlay, district cards on click, the party editor.
 - **Phase 2 (City Hall gate):** built, not yet tested in game. Detects a placed City Hall (by `AdminBuilding` plus a "cityhall" prefab name, since the Central Bank carries `AdminBuilding` too), moves through No City Hall → Awaiting founding → Active ⇄ Suspended, and shows the state in the panel. Not saved yet; recomputed on load.
 - **Phase 4a (model library):** done. `ElectionAtlas.Model` runs elections and polls over voter groups, with no game references: lean, turnout calibrated to real-world presets, vote shares, governing rules, approval from the game's happiness, and frozen election snapshots with tinted map colors. 44 xUnit tests.
 - Next: phase 3 (voter-group reader), after spikes 4, 6 and 7 run on a populated city.
@@ -29,12 +30,16 @@ ElectionAtlas/                  the mod (net48), references Game.dll
   ElectionAtlas.csproj          builds with the official toolchain, or compile-only without it
   Mod.cs                        entry point (IMod)
   Setting.cs, LocaleEN.cs       options menu + English strings
+  Systems/CityHallSystem.cs     the City Hall gate (phase 2)
   Systems/ElectionsUISystem.cs  C# <-> UI bindings (group "electionAtlas")
-  Diagnostics/                  spike logger and save probe (Debug builds only)
+  Dev/                          developer commands (DEV_TOOLS builds only)
+  Diagnostics/                  spike logger and save probe (DEV_TOOLS builds only)
   Properties/PublishConfiguration.xml   Paradox Mods metadata
   UI/                           TypeScript/React UI module, built with webpack to ElectionAtlas.mjs
 ElectionAtlas.Model/            netstandard2.0, no game references: the election model
-ElectionAtlas.Model.Tests/      xUnit, net8.0
+ElectionAtlas.Model.Tests/      xUnit, net8.0; Cities/ holds exported cities for replay tests
+ElectionAtlas.Lab/              console tool: run elections on exported cities without the game
+tools/                          dev.ps1 (build, deploy, launch) and logs.ps1
 ```
 
 ## Prerequisites
@@ -123,6 +128,40 @@ Debug builds include a diagnostics system that answers the open questions about 
 2. Turn on Options → Election Atlas → Debug → Save probe, then restart the game.
 3. Load the copy, save it, then load it again.
 4. Turn the probe off afterwards.
+
+## Developer tools
+
+The game takes a long time to start, so most testing is set up to avoid restarts.
+
+**Build flag.** Everything in `ElectionAtlas/Dev/` and `ElectionAtlas/Diagnostics/` is compiled only when `DEV_TOOLS` is defined: on in Debug builds, off in Release. `-p:DevTools=true` turns it on in Release, and `-p:DevTools=false` turns it off in Debug. Publishing refuses any build that has it on.
+
+**One-command loop.** `tools\dev.ps1` builds and deploys (Debug), then starts the game through Steam. Set the game's Steam launch options once (Library → Cities: Skylines II → Properties → Launch Options) to `-continuelastsave -noSplash -developerMode --uiDeveloperMode`, so it loads straight into your last save. Those are fields of the game's own `GameManager.Configuration`; `-developerMode` turns on the game's built-in dev tools, and `--uiDeveloperMode` opens the UI debugger on `http://localhost:9444` and hot-reloads the UI while `npm run dev` runs in `ElectionAtlas\UI`. Don't start `Cities2.exe` directly: the game's platform integration fails to initialize and it never gets past startup.
+
+```powershell
+.\tools\dev.ps1 -Restart
+```
+
+`-Restart` closes a running game first; `-NoLaunch`, `-NoBuild` and `-SkipUI` skip steps. `tools\logs.ps1 -Follow` prints both Election Atlas logs as they're written.
+
+**In-game commands.** Dev builds add a Developer section to the Elections panel:
+
+| Button | What it does |
+| --- | --- |
+| Run election | Reads every resident, runs an election with the test parties, and shows turnout, shares, the governing party and the closest district. Kept in memory (reset on load); the next election treats the winner as incumbent. The first one moves Awaiting founding to Active. |
+| Run poll | Voting intention among all adults and approval of the governing party |
+| Parties: 2 / 4 | Switches the test lineup between Left/Right and four parties |
+| Clear elections | Forgets the dev elections; nobody governs |
+| Spike report | Writes a full spike report to `ElectionAtlas.Spikes.log` now, even while paused |
+| Export city CSV | Writes the city's voter groups to `ModsData\ElectionAtlas\dev\city-<time>.csv` in the game's user data folder |
+| NoCityHall … Suspended | Forces the government state, to see each panel state without building or bulldozing |
+
+**Offline runs.** Export a city once, then tune the model without the game:
+
+```powershell
+dotnet run --project ElectionAtlas.Lab -- "$env:USERPROFILE\AppData\LocalLow\Colossal Order\Cities Skylines II\ModsData\ElectionAtlas\dev" --parties 4 --elections 3
+```
+
+A folder argument uses its newest CSV. `--preset`, `--rule`, `--incumbent` and `--seed` change the run, and `--sample <file>` writes a synthetic city if you don't have one yet. Copy exported CSVs into `ElectionAtlas.Model.Tests\Cities\` and `dotnet test` replays them too.
 
 ## Notes
 

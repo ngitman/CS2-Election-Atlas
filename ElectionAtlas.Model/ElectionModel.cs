@@ -23,12 +23,14 @@ namespace ElectionAtlas.Model
             GoverningRule rule,
             TurnoutPreset preset,
             ModelConfig cfg,
-            ulong seed)
+            ulong seed,
+            GovernmentCondition condition = default)
         {
             ValidateInputs(table, parties, cfg);
             int partyCount = parties.Count;
             int districtCount = table.DistrictCount;
             int incumbent = IndexOf(parties, incumbentId);
+            float incumbentPenalty = incumbent >= 0 ? condition.IncumbentPenalty(cfg) : 0f;
 
             var rng = new SplitMix64(seed);
             var presetData = cfg.GetPreset(preset);
@@ -47,7 +49,7 @@ namespace ElectionAtlas.Model
                 eligible[g.District] += g.Count;
 
                 double voters = g.Count * (double)curve.Turnout(g);
-                VoteModel.Shares(LeanModel.Lean(g, cfg.Lean), g.AvgHappiness, parties, incumbent, cfg, shares);
+                VoteModel.Shares(LeanModel.Lean(g, cfg.Lean), g.AvgHappiness, parties, incumbent, cfg, shares, incumbentPenalty);
 
                 int row = g.District * partyCount;
                 for (int p = 0; p < partyCount; p++)
@@ -117,12 +119,14 @@ namespace ElectionAtlas.Model
         /// governing party, which starts from the game's happiness and shifts with how much the group prefers
         /// that party over the others.
         /// </summary>
-        public static PollResult RunPoll(GroupTable table, IReadOnlyList<Party> parties, string incumbentId, ModelConfig cfg)
+        public static PollResult RunPoll(GroupTable table, IReadOnlyList<Party> parties, string incumbentId, ModelConfig cfg, GovernmentCondition condition = default)
         {
             ValidateInputs(table, parties, cfg);
             int partyCount = parties.Count;
             int districtCount = table.DistrictCount;
             int incumbent = IndexOf(parties, incumbentId);
+            float incumbentPenalty = incumbent >= 0 ? condition.IncumbentPenalty(cfg) : 0f;
+            float approvalPenalty = incumbent >= 0 ? condition.ApprovalPenalty(cfg) : 0f;
 
             var intention = new double[districtCount * partyCount];
             var approvalSum = new double[districtCount];
@@ -145,9 +149,11 @@ namespace ElectionAtlas.Model
                     governingPreference = preference[incumbent];
                 }
 
-                approvalSum[g.District] += g.Count * (double)Approval(g.AvgHappiness, incumbent >= 0, governingPreference, partyCount, cfg);
+                float approval = Approval(g.AvgHappiness, incumbent >= 0, governingPreference, partyCount, cfg);
+                approval = Clamp(approval - approvalPenalty, 0f, 100f);
+                approvalSum[g.District] += g.Count * (double)approval;
 
-                VoteModel.Shares(lean, g.AvgHappiness, parties, incumbent, cfg, shares);
+                VoteModel.Shares(lean, g.AvgHappiness, parties, incumbent, cfg, shares, incumbentPenalty);
                 int row = g.District * partyCount;
                 for (int p = 0; p < partyCount; p++)
                     intention[row + p] += g.Count * (double)shares[p];

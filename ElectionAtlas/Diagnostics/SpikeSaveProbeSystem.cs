@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEV_TOOLS
 using Colossal.Serialization.Entities;
 using Game;
 

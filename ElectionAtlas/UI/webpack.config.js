@@ -1,6 +1,21 @@
+const fs = require("fs");
 const path = require("path");
 const webpack = require("webpack");
 const mod = require("./mod.json");
+
+// The game loads <id>.css next to <id>.mjs when the module exports `hasCSS` (see src/index.tsx).
+// This copies src/styles.css there as-is; no CSS tooling needed.
+const cssSource = path.join(__dirname, "src", "styles.css");
+class EmitStylesPlugin {
+  apply(compiler) {
+    compiler.hooks.thisCompilation.tap("EmitStyles", (compilation) => {
+      compilation.fileDependencies.add(cssSource);
+      compilation.hooks.processAssets.tap({ name: "EmitStyles", stage: webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL }, () => {
+        compilation.emitAsset(`${mod.id}.css`, new webpack.sources.RawSource(fs.readFileSync(cssSource, "utf8")));
+      });
+    });
+  }
+}
 
 // The game reads this header to register the UI module's id, author, version and dependencies
 // (without it the module registers with null metadata). Same fields as the toolchain's UI template.
@@ -47,6 +62,7 @@ module.exports = {
     "cohtml/cohtml": "cohtml/cohtml",
   },
   plugins: [
+    new EmitStylesPlugin(),
     // Added after minification (REPORT stage) so the minifier can't strip it.
     new webpack.BannerPlugin({ banner: header, raw: true, stage: webpack.Compilation.PROCESS_ASSETS_STAGE_REPORT }),
   ],

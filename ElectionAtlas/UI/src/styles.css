@@ -1,0 +1,168 @@
+/*
+  Election Atlas panel styles. Loaded by the game next to ElectionAtlas.mjs (the module exports hasCSS).
+  Every class is prefixed ea- so nothing leaks into the game's own UI.
+  Sizes are in rem, which the game scales with its UI size setting.
+*/
+
+.ea-body {
+  padding: 12rem 16rem 16rem 16rem;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14rem;
+}
+
+.ea-muted { color: rgba(255, 255, 255, 0.58); }
+.ea-small { font-size: 12rem; }
+.ea-bold { font-weight: bold; }
+.ea-nowrap { white-space: nowrap; }
+
+/* ---------- government strip ---------- */
+
+.ea-strip {
+  display: flex;
+  align-items: stretch;
+  padding: 10rem 4rem;
+  margin-bottom: 12rem;
+  border-radius: 10rem;
+  background-color: rgba(255, 255, 255, 0.06);
+}
+.ea-strip__cell { flex: 1; padding: 0 12rem; }
+.ea-strip__cell + .ea-strip__cell { border-left: 1rem solid rgba(255, 255, 255, 0.1); }
+.ea-strip__value { font-size: 20rem; font-weight: bold; line-height: 1.2; white-space: nowrap; }
+
+.ea-party { display: flex; align-items: center; }
+.ea-dot { width: 10rem; height: 10rem; border-radius: 5rem; margin-right: 6rem; flex-shrink: 0; }
+.ea-dot--lg { width: 14rem; height: 14rem; border-radius: 7rem; margin-right: 8rem; }
+
+.ea-callout {
+  padding: 8rem 12rem;
+  margin-bottom: 12rem;
+  border-radius: 8rem;
+  border-left: 3rem solid #e8a33d;
+  background-color: rgba(232, 163, 61, 0.16);
+}
+.ea-callout--info { border-left-color: #7db4ff; background-color: rgba(125, 180, 255, 0.12); }
+
+/* ---------- tabs (segmented control) ---------- */
+
+.ea-tabs {
+  display: flex;
+  padding: 3rem;
+  margin-bottom: 12rem;
+  border-radius: 9rem;
+  background-color: rgba(0, 0, 0, 0.28);
+}
+.ea-tab {
+  flex: 1;
+  padding: 6rem 0;
+  border-radius: 6rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.62);
+}
+.ea-tab:hover { color: rgba(255, 255, 255, 0.95); background-color: rgba(255, 255, 255, 0.06); }
+.ea-tab--active,
+.ea-tab--active:hover { color: #ffffff; font-weight: bold; background-color: rgba(255, 255, 255, 0.16); }
+
+/* ---------- election picker + citywide result ---------- */
+
+.ea-picker { display: flex; align-items: center; margin-bottom: 8rem; }
+.ea-picker__title { flex: 1; text-align: center; }
+.ea-iconbtn {
+  width: 30rem;
+  height: 30rem;
+  border-radius: 7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+.ea-iconbtn:hover { background-color: rgba(255, 255, 255, 0.18); }
+.ea-iconbtn--off,
+.ea-iconbtn--off:hover { opacity: 0.25; background-color: rgba(255, 255, 255, 0.08); }
+
+.ea-stack { display: flex; height: 14rem; border-radius: 7rem; overflow: hidden; margin: 6rem 0; }
+.ea-legend { display: flex; flex-wrap: wrap; }
+.ea-legend__item { display: flex; align-items: center; margin: 0 16rem 4rem 0; white-space: nowrap; }
+
+/* ---------- district tiles ---------- */
+
+.ea-tiles { display: flex; flex-wrap: wrap; margin: 10rem -4rem 0 -4rem; }
+.ea-tile { width: 33.333%; padding: 4rem; }
+.ea-tile__inner {
+  min-height: 70rem;
+  padding: 8rem 10rem;
+  border-radius: 9rem;
+  border: 2rem solid rgba(255, 255, 255, 0);
+}
+.ea-tile__inner:hover { border-color: rgba(255, 255, 255, 0.55); }
+.ea-tile--selected .ea-tile__inner,
+.ea-tile--selected .ea-tile__inner:hover { border-color: #ffffff; }
+.ea-tile__name { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ea-tile__share { font-size: 20rem; font-weight: bold; line-height: 1.25; }
+.ea-tile__meta { display: flex; justify-content: space-between; font-size: 12rem; }
+
+/* ---------- rows and bars ---------- */
+
+.ea-section { margin-top: 14rem; }
+.ea-section__title { font-weight: bold; margin-bottom: 6rem; }
+
+.ea-row { display: flex; align-items: center; padding: 5rem 0; }
+.ea-row + .ea-row { border-top: 1rem solid rgba(255, 255, 255, 0.06); }
+.ea-row__label { flex: 1; color: rgba(255, 255, 255, 0.62); }
+.ea-row__value { flex-shrink: 0; font-weight: bold; white-space: nowrap; }
+
+.ea-share { display: flex; align-items: center; padding: 4rem 0; }
+.ea-share__name { width: 130rem; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ea-share__value { width: 64rem; flex-shrink: 0; text-align: right; white-space: nowrap; font-weight: bold; }
+.ea-bar { flex: 1; height: 8rem; margin: 0 10rem; border-radius: 4rem; background-color: rgba(255, 255, 255, 0.08); }
+.ea-bar__fill { height: 100%; border-radius: 4rem; }
+
+/* ---------- history ---------- */
+
+.ea-card {
+  padding: 10rem 12rem;
+  margin-bottom: 6rem;
+  border-radius: 9rem;
+  border: 2rem solid rgba(255, 255, 255, 0);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+.ea-card:hover { background-color: rgba(255, 255, 255, 0.09); }
+.ea-card--active,
+.ea-card--active:hover { border-color: rgba(255, 255, 255, 0.6); }
+.ea-card__head { display: flex; justify-content: space-between; margin-bottom: 4rem; }
+
+/* ---------- polls ---------- */
+
+.ea-spark { display: flex; align-items: flex-end; height: 56rem; margin: 6rem 0 2rem 0; }
+.ea-spark__bar { flex: 1; margin: 0 1rem; border-radius: 2rem 2rem 0 0; background-color: #7db4ff; }
+.ea-spark__bar--gap { background-color: rgba(255, 255, 255, 0.12); }
+.ea-axis { display: flex; justify-content: space-between; font-size: 12rem; color: rgba(255, 255, 255, 0.55); }
+
+/* ---------- district popup ---------- */
+
+.ea-hero { font-size: 34rem; font-weight: bold; line-height: 1.1; }
+.ea-hero__caption { margin: 2rem 0 10rem 0; }
+
+/* ---------- buttons ---------- */
+
+.ea-actions { display: flex; flex-wrap: wrap; margin-top: 10rem; }
+.ea-btn {
+  padding: 6rem 12rem;
+  margin: 0 6rem 6rem 0;
+  border-radius: 7rem;
+  white-space: nowrap;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.ea-btn:hover { background-color: rgba(255, 255, 255, 0.2); }
+.ea-btn--primary { background-color: #2f7bd8; }
+.ea-btn--primary:hover { background-color: #3f8ce8; }
+.ea-btn--on { background-color: rgba(125, 180, 255, 0.35); }
+
+/* ---------- developer drawer ---------- */
+
+.ea-dev { margin-top: 16rem; padding-top: 10rem; border-top: 1rem solid rgba(255, 255, 255, 0.12); }
+.ea-dev__toggle { display: flex; justify-content: space-between; color: rgba(255, 255, 255, 0.62); }
+.ea-dev__toggle:hover { color: #ffffff; }
+.ea-dev__status { margin-top: 6rem; padding: 8rem 10rem; border-radius: 7rem; font-size: 12rem; background-color: rgba(0, 0, 0, 0.25); }
+
+.ea-empty { padding: 24rem 12rem; text-align: center; color: rgba(255, 255, 255, 0.62); }

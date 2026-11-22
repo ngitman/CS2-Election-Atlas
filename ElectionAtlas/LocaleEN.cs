@@ -43,9 +43,18 @@ namespace ElectionAtlas
                 { m_Setting.GetEnumValueLocaleID(TurnoutPreset.UsGeneral), "US general (~65%)" },
                 { m_Setting.GetEnumValueLocaleID(TurnoutPreset.UkGeneral), "UK general (~67%)" },
                 { m_Setting.GetEnumValueLocaleID(TurnoutPreset.Nordic), "Nordic (~80%)" },
+
+                { m_Setting.GetOptionLabelLocaleID(nameof(Setting.PartyLineup)), "Parties" },
+                { m_Setting.GetOptionDescLocaleID(nameof(Setting.PartyLineup)), "Test party lineup until the party editor arrives. A change applies from the next poll." },
+                { m_Setting.GetEnumValueLocaleID(PartyLineup.TwoParties), "Two parties (Left, Right)" },
+                { m_Setting.GetEnumValueLocaleID(PartyLineup.FourParties), "Four parties (Greens, Labour, Liberals, Conservatives)" },
+
+                { m_Setting.GetOptionGroupLocaleID(Setting.kSaveGroup), "Saving" },
+                { m_Setting.GetOptionLabelLocaleID(nameof(Setting.SaveElectionData)), "Save election data in the city (experimental)" },
+                { m_Setting.GetOptionDescLocaleID(nameof(Setting.SaveElectionData)), "Keeps elections, polls and the government's state in your save. Experimental: use a copy of a city, because a save written with this may not load once the mod is removed. Takes effect after a restart." },
             };
 
-#if DEBUG
+#if DEV_TOOLS
             entries[m_Setting.GetOptionGroupLocaleID(Setting.kDebugGroup)] = "Debug (development builds only)";
             entries[m_Setting.GetOptionLabelLocaleID(nameof(Setting.SaveProbe))] = "Save probe (spike 3)";
             entries[m_Setting.GetOptionDescLocaleID(nameof(Setting.SaveProbe))] =

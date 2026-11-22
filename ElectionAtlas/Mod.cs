@@ -27,13 +27,22 @@ namespace ElectionAtlas
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEN(Settings));
             AssetDatabase.global.LoadSettings(Id, Settings, new Setting(this));
 
-            // The City Hall gate (phase 2) runs in the UI phase so it reacts while paused; it only counts
-            // chunks every 32 frames. Election and poll systems (phases 3-5) will run on a long interval.
+            // The City Hall gate runs in the UI phase so it reacts while paused; it only counts chunks every
+            // 32 frames. The election calendar runs with the simulation (no month ticks while paused).
             updateSystem.UpdateAt<CityHallSystem>(SystemUpdatePhase.UIUpdate);
+            updateSystem.UpdateAt<ElectionSystem>(SystemUpdatePhase.GameSimulation);
+            if (Settings.SaveElectionData)
+                updateSystem.UpdateAt<ElectionStoreSystem>(SystemUpdatePhase.GameSimulation);
+            else
+                Log.Info("Election data saving is off (Options > Election Atlas > Saving)");
             updateSystem.UpdateAt<ElectionsUISystem>(SystemUpdatePhase.UIUpdate);
+            // "Election" section in the game's own info panel when a district is selected in the city.
+            updateSystem.UpdateAt<DistrictElectionSection>(SystemUpdatePhase.UIUpdate);
 
-#if DEBUG
-            // In-game spikes: one play session answers what phases 2-5 depend on. Never in Release builds.
+#if DEV_TOOLS
+            // Developer tools: never in Release builds (DEV_TOOLS is off there, and publishing refuses a build with it).
+            Log.Info("Developer tools are compiled in (DEV_TOOLS)");
+            updateSystem.UpdateAt<Dev.DevCommandsSystem>(SystemUpdatePhase.UIUpdate);
             updateSystem.UpdateAt<Diagnostics.SpikeLoggerSystem>(SystemUpdatePhase.GameSimulation);
             if (Settings.SaveProbe)
             {

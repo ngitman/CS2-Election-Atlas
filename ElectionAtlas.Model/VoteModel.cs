@@ -18,15 +18,16 @@ namespace ElectionAtlas.Model
         /// <summary>
         /// Writes each party's share of the group's vote into <paramref name="sharesOut"/> (same order as
         /// <paramref name="parties"/>). The shares sum to 1. <paramref name="incumbentIndex"/> is -1 when nobody governs.
+        /// <paramref name="incumbentPenalty"/> is subtracted from the governing party's utility (see GovernmentCondition).
         /// </summary>
-        public static void Shares(Position voter, float avgHappiness, IReadOnlyList<Party> parties, int incumbentIndex, ModelConfig cfg, float[] sharesOut)
+        public static void Shares(Position voter, float avgHappiness, IReadOnlyList<Party> parties, int incumbentIndex, ModelConfig cfg, float[] sharesOut, float incumbentPenalty = 0f)
         {
             if (parties == null) throw new ArgumentNullException(nameof(parties));
             if (sharesOut == null || sharesOut.Length < parties.Count)
                 throw new ArgumentException("sharesOut must have room for every party.", nameof(sharesOut));
 
             int n = parties.Count;
-            float bonus = IncumbentBonus(avgHappiness, cfg);
+            float bonus = IncumbentBonus(avgHappiness, cfg) - incumbentPenalty;
 
             // Softmax, shifted by the largest utility so exp() never overflows.
             float max = float.NegativeInfinity;

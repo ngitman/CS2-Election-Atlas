@@ -14,6 +14,13 @@
 		<!-- Set by the official modding toolchain (game Options > Modding) -->
 		<CSIIToolPath>$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))</CSIIToolPath>
 		<HasModToolchain Condition="'$(CSIIToolPath)' != '' And Exists('$(CSIIToolPath)\Mod.props')">true</HasModToolchain>
+
+		<!--
+			Developer tools (Dev/ and Diagnostics/: dev commands, spike logger, save probe) are compiled in
+			only when DEV_TOOLS is defined: on in Debug, off in Release unless built with -p:DevTools=true.
+		-->
+		<DevTools Condition="'$(DevTools)' == '' And '$(Configuration)' == 'Debug'">true</DevTools>
+		<DefineConstants Condition="'$(DevTools)' == 'true'">$(DefineConstants);DEV_TOOLS</DefineConstants>
 	</PropertyGroup>
 
 	<!-- With the toolchain: the official build, Burst post-processing and deploy to the Mods folder -->
@@ -65,6 +72,11 @@
 		<None Include="$(ModPropsFile)" Link="Properties\Mod.props" />
 		<None Include="$(ModTargetsFile)" Link="Properties\Mod.targets" />
 	</ItemGroup>
+
+	<!-- Never publish developer tools to Paradox Mods. -->
+	<Target Name="BlockDevToolsInPublish" BeforeTargets="Publish" Condition="'$(DevTools)' == 'true'">
+		<Error Text="This build includes developer tools (DEV_TOOLS). Publish a Release build without -p:DevTools=true." />
+	</Target>
 
 	<!--
 		The toolchain's ModPostProcessor targets .NET 6. DOTNET_ROLL_FORWARD=Major lets it run on a newer runtime

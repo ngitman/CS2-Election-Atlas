@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!-- Runs the election model on exported city CSVs, without the game. -->
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>disable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<RootNamespace>ElectionAtlas.Lab</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\ElectionAtlas.Model\ElectionAtlas.Model.csproj" />
+	</ItemGroup>
+</Project>
