@@ -62,7 +62,7 @@ namespace ElectionAtlas
             GoverningRule = GoverningRule.PopularVote;
             TurnoutPreset = TurnoutPreset.UsGeneral;
             PartyLineup = PartyLineup.TwoParties;
-            SaveElectionData = false;
+            SaveElectionData = true;
 #if DEV_TOOLS
             SaveProbe = false;
 #endif

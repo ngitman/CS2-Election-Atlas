@@ -31,10 +31,8 @@ namespace ElectionAtlas
             // 32 frames. The election calendar runs with the simulation (no month ticks while paused).
             updateSystem.UpdateAt<CityHallSystem>(SystemUpdatePhase.UIUpdate);
             updateSystem.UpdateAt<ElectionSystem>(SystemUpdatePhase.GameSimulation);
-            if (Settings.SaveElectionData)
-                updateSystem.UpdateAt<ElectionStoreSystem>(SystemUpdatePhase.GameSimulation);
-            else
-                Log.Info("Election data saving is off (Options > Election Atlas > Saving)");
+            // Always registered; the "Save election data" setting decides at save time whether the data is written.
+            updateSystem.UpdateAt<ElectionStoreSystem>(SystemUpdatePhase.GameSimulation);
             updateSystem.UpdateAt<ElectionsUISystem>(SystemUpdatePhase.UIUpdate);
             // "Election" section in the game's own info panel when a district is selected in the city.
             updateSystem.UpdateAt<DistrictElectionSection>(SystemUpdatePhase.UIUpdate);

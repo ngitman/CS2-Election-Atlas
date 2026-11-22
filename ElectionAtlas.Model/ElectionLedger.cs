@@ -23,7 +23,8 @@ namespace ElectionAtlas.Model
     /// </summary>
     public sealed class ElectionLedger
     {
-        public const int CurrentVersion = 1;
+        /// <summary>Save format. 1: ledger, elections, polls. 2: adds an "includes data" flag after the version.</summary>
+        public const int CurrentVersion = 2;
 
         public GovernmentState State = GovernmentState.NoCityHall;
         public int UnlockedMonth = ElectionSchedule.NotScheduled;

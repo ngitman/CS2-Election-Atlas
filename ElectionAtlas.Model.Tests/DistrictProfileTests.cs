@@ -22,6 +22,9 @@ namespace ElectionAtlas.Model.Tests
         public void TowersAreUrbanCore() => Assert.Equal(DistrictProfile.UrbanCore, Classify(2000, 4f, 40));
 
         [Fact]
+        public void VeryDenseMixedLotsAreUrbanCore() => Assert.Equal(DistrictProfile.UrbanCore, Classify(8738, 1.45f, 119.1f));
+
+        [Fact]
         public void RowHousesAreUrban() => Assert.Equal(DistrictProfile.Urban, Classify(800, 0.9f, 60));
 
         [Fact]

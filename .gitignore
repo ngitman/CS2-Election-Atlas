@@ -8,3 +8,6 @@ dist/
 # ModPostProcessor caches (the toolchain's Mod.props excludes these too)
 Library/
 Logs/
+
+# Internal agent/session docs: never committed
+.agents/

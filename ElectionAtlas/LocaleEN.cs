@@ -50,8 +50,8 @@ namespace ElectionAtlas
                 { m_Setting.GetEnumValueLocaleID(PartyLineup.FourParties), "Four parties (Greens, Labour, Liberals, Conservatives)" },
 
                 { m_Setting.GetOptionGroupLocaleID(Setting.kSaveGroup), "Saving" },
-                { m_Setting.GetOptionLabelLocaleID(nameof(Setting.SaveElectionData)), "Save election data in the city (experimental)" },
-                { m_Setting.GetOptionDescLocaleID(nameof(Setting.SaveElectionData)), "Keeps elections, polls and the government's state in your save. Experimental: use a copy of a city, because a save written with this may not load once the mod is removed. Takes effect after a restart." },
+                { m_Setting.GetOptionLabelLocaleID(nameof(Setting.SaveElectionData)), "Save election data in the city" },
+                { m_Setting.GetOptionDescLocaleID(nameof(Setting.SaveElectionData)), "Keeps elections, polls and the government's state in your save. A save written with this still loads without the mod: the game skips the election data. Applies the next time you save." },
             };
 
 #if DEV_TOOLS

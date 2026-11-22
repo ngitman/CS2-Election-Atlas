@@ -8,19 +8,28 @@ namespace ElectionAtlas.Systems
 {
     /// <summary>
     /// Saves the election ledger into the city's save file (phase 5), through the same system-serialization path
-    /// 40 vanilla systems use. Registered only when "Save election data" is on, because it's not yet confirmed
-    /// that a save written with it loads cleanly after the mod is removed (spike 3). Versioned: a newer format
-    /// than this build knows is ignored rather than misread.
+    /// 40 vanilla systems use. Without the mod, the game's loader logs "Serializer not found" for this block and
+    /// skips it (ObsoleteSystemSerializer), so saves stay loadable.
+    ///
+    /// Always registered; the "Save election data" setting decides at save time whether the data is written (a
+    /// flag after the version says). Versioned: a newer format than this build knows is ignored rather than
+    /// misread, and a block that fails to read starts the city fresh instead of breaking the load.
+    /// Size: only the last <see cref="kDetailedPolls"/> polls keep per-district approval (all the UI shows);
+    /// older polls keep their citywide numbers.
     /// </summary>
     public partial class ElectionStoreSystem : GameSystemBase, IDefaultSerializable, ISerializable
     {
+        private const int kDetailedPolls = 24;
+
+        // Sanity limits: a block claiming more than these is corrupt, not a big city.
+        private const int kMaxElections = 100000, kMaxParties = 64, kMaxDistricts = 100000, kMaxPolls = 1000000;
+
         private ElectionSystem m_Elections;
 
         protected override void OnCreate()
         {
             base.OnCreate();
             m_Elections = World.GetOrCreateSystemManaged<ElectionSystem>();
-            Mod.Log.Info("Election data saving is ON (experimental)");
         }
 
         protected override void OnUpdate()
@@ -34,8 +43,16 @@ namespace ElectionAtlas.Systems
 
         public void Serialize<TWriter>(TWriter writer) where TWriter : IWriter
         {
-            var l = m_Elections.LedgerForSave();
+            bool include = Mod.Settings?.SaveElectionData ?? true;
             writer.Write(ElectionLedger.CurrentVersion);
+            writer.Write(include);
+            if (!include)
+            {
+                Mod.Log.Info("Election data not saved (Options > Election Atlas > Saving is off)");
+                return;
+            }
+
+            var l = m_Elections.LedgerForSave();
             writer.Write((int)l.State);
             writer.Write(l.UnlockedMonth);
             writer.Write(l.NextElectionMonth);
@@ -79,8 +96,10 @@ namespace ElectionAtlas.Systems
             }
 
             writer.Write(l.Polls.Count);
-            foreach (var r in l.Polls.Records)
+            int detailedFrom = l.Polls.Count - kDetailedPolls;
+            for (int pi = 0; pi < l.Polls.Count; pi++)
             {
+                var r = l.Polls.Records[pi];
                 writer.Write(r.MonthIndex);
                 WriteString(writer, r.GoverningPartyId);
                 writer.Write(r.PartyIds.Length);
@@ -88,7 +107,7 @@ namespace ElectionAtlas.Systems
                 writer.Write(r.Approval);
                 writer.Write(r.Intention.Length);
                 foreach (float f in r.Intention) writer.Write(f);
-                int n = r.DistrictIds != null && r.DistrictApproval != null ? r.DistrictIds.Length : -1;
+                int n = pi >= detailedFrom && r.DistrictIds != null && r.DistrictApproval != null ? r.DistrictIds.Length : -1;
                 writer.Write(n);
                 for (int i = 0; i < n; i++)
                 {
@@ -102,12 +121,29 @@ namespace ElectionAtlas.Systems
 
         public void Deserialize<TReader>(TReader reader) where TReader : IReader
         {
+            try
+            {
+                m_Elections.RestoreFromSave(Read(reader));
+            }
+            catch (Exception e)
+            {
+                Mod.Log.Error(e, "Election data in this save couldn't be read; the city starts with no election history");
+                m_Elections.RestoreFromSave(null);
+            }
+        }
+
+        private static ElectionLedger Read<TReader>(TReader reader) where TReader : IReader
+        {
             reader.Read(out int version);
             if (version < 1 || version > ElectionLedger.CurrentVersion)
             {
                 Mod.Log.Warn($"Election data has format version {version}; this build reads up to {ElectionLedger.CurrentVersion}. Starting fresh.");
-                m_Elections.RestoreFromSave(null);
-                return;
+                return null;
+            }
+            if (version >= 2)
+            {
+                reader.Read(out bool included);
+                if (!included) return null;
             }
 
             var l = new ElectionLedger();
@@ -119,6 +155,7 @@ namespace ElectionAtlas.Systems
             reader.Read(out l.ShutdownMonths);
 
             reader.Read(out int elections);
+            Check(elections, kMaxElections, "elections");
             for (int e = 0; e < elections; e++)
             {
                 reader.Read(out int number);
@@ -130,6 +167,7 @@ namespace ElectionAtlas.Systems
                 reader.Read(out int governing);
 
                 reader.Read(out int partyCount);
+                Check(partyCount, kMaxParties, "parties");
                 var parties = new PartySnapshot[partyCount];
                 for (int p = 0; p < partyCount; p++)
                 {
@@ -142,6 +180,7 @@ namespace ElectionAtlas.Systems
                 }
 
                 reader.Read(out int districtCount);
+                Check(districtCount, kMaxDistricts, "districts");
                 var districts = new DistrictSnapshot[districtCount];
                 for (int d = 0; d < districtCount; d++)
                 {
@@ -152,6 +191,7 @@ namespace ElectionAtlas.Systems
                     reader.Read(out float margin);
                     reader.Read(out int color);
                     reader.Read(out int voteCount);
+                    Check(voteCount, kMaxParties, "vote counts");
                     var votes = new long[voteCount];
                     for (int v = 0; v < voteCount; v++) votes[v] = ReadLong(reader);
                     districts[d] = new DistrictSnapshot(districtId, name, eligible, votes, winner, margin, unchecked((uint)color));
@@ -161,15 +201,18 @@ namespace ElectionAtlas.Systems
             }
 
             reader.Read(out int polls);
+            Check(polls, kMaxPolls, "polls");
             for (int i = 0; i < polls; i++)
             {
                 reader.Read(out int monthIndex);
                 string governingId = ReadString(reader);
                 reader.Read(out int idCount);
+                Check(idCount, kMaxParties, "poll parties");
                 var ids = new string[idCount];
                 for (int k = 0; k < idCount; k++) ids[k] = ReadString(reader);
                 reader.Read(out float approval);
                 reader.Read(out int intentionCount);
+                Check(intentionCount, kMaxParties, "poll intentions");
                 var intention = new float[intentionCount];
                 for (int k = 0; k < intentionCount; k++) reader.Read(out intention[k]);
                 reader.Read(out int n);
@@ -177,6 +220,7 @@ namespace ElectionAtlas.Systems
                 float[] districtApproval = null;
                 if (n >= 0)
                 {
+                    Check(n, kMaxDistricts, "poll districts");
                     districtIds = new long[n];
                     districtApproval = new float[n];
                     for (int k = 0; k < n; k++)
@@ -189,7 +233,14 @@ namespace ElectionAtlas.Systems
                 l.Polls.Add(new PollRecord(monthIndex, governingId, ids, approval, intention, districtIds, districtApproval));
             }
 
-            m_Elections.RestoreFromSave(l);
+            Mod.Log.Info($"Election data read: {l.State}, {l.Archive.Count} election(s), {l.Polls.Count} poll(s)");
+            return l;
+        }
+
+        private static void Check(int count, int max, string what)
+        {
+            if (count < 0 || count > max)
+                throw new System.IO.InvalidDataException($"implausible number of {what}: {count}");
         }
 
         // Strings: a presence flag then the text, so null survives a round trip.

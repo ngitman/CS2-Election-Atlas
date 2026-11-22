@@ -61,6 +61,10 @@ namespace ElectionAtlas.Model
         public float UrbanCoreHomeDensity = 1.5f;
         public float UrbanHomeDensity = 0.5f;
 
+        /// <summary>Households per hectare at or above which a district is Urban core whatever its lots look like
+        /// (calibrated on a test city: tower districts ran 73-108/ha, suburbs 7-11/ha).</summary>
+        public float UrbanCoreHouseholdsPerHectare = 60f;
+
         /// <summary>Households per hectare below which a low-density district is Rural rather than Suburban.</summary>
         public float RuralHouseholdsPerHectare = 2f;
     }
@@ -77,7 +81,7 @@ namespace ElectionAtlas.Model
                 return d.IndustrialJobs >= cfg.IndustrialShare * jobs ? DistrictProfile.Industrial : DistrictProfile.Business;
 
             float density = d.HomeDensity;
-            if (density >= cfg.UrbanCoreHomeDensity) return DistrictProfile.UrbanCore;
+            if (density >= cfg.UrbanCoreHomeDensity || d.HouseholdsPerHectare >= cfg.UrbanCoreHouseholdsPerHectare) return DistrictProfile.UrbanCore;
             if (density >= cfg.UrbanHomeDensity) return DistrictProfile.Urban;
             return d.HouseholdsPerHectare < cfg.RuralHouseholdsPerHectare ? DistrictProfile.Rural : DistrictProfile.Suburban;
         }
