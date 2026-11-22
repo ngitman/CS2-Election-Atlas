@@ -99,8 +99,8 @@ namespace ElectionAtlas.Systems
                 }
             }
 
-            m_DistrictNames.Add("Unassigned");
-            m_Districts.Add(new DistrictInfo(-1, "Unassigned"));
+            m_DistrictNames.Add(DistrictInfo.OutsideName);
+            m_Districts.Add(DistrictInfo.Outside);
             InProgress = true;
         }
 

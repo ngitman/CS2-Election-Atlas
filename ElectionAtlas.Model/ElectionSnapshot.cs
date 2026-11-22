@@ -36,6 +36,24 @@ namespace ElectionAtlas.Model
 
         public readonly long Id;
         public readonly string Name;
+
+        /// <summary>Id of the bucket for residents whose home is outside every drawn district.
+        /// Its votes count toward the city total, but it is not a seat anyone can win.</summary>
+        public const long OutsideId = -1;
+        public const string OutsideName = "Outside any district";
+
+        public bool IsSeat => Id != OutsideId;
+
+        public static DistrictInfo Outside => new DistrictInfo(OutsideId, OutsideName);
+
+        /// <summary>Index of the outside bucket in <paramref name="districts"/>, or -1 if there is none.</summary>
+        public static int IndexOfOutside(DistrictInfo[] districts)
+        {
+            if (districts == null) return -1;
+            for (int i = 0; i < districts.Length; i++)
+                if (!districts[i].IsSeat) return i;
+            return -1;
+        }
     }
 
     public sealed class DistrictSnapshot
@@ -67,6 +85,9 @@ namespace ElectionAtlas.Model
         public uint MapColor { get; }
 
         public float Turnout => Eligible > 0 ? (float)((double)Votes / Eligible) : 0f;
+
+        /// <summary>False for the outside-any-district bucket: its votes count citywide, but nobody wins it.</summary>
+        public bool IsSeat => DistrictId != DistrictInfo.OutsideId;
     }
 
     /// <summary>
@@ -105,7 +126,7 @@ namespace ElectionAtlas.Model
                 if (d.PartyVotes.Length != parties.Length)
                     throw new ArgumentException("Every district needs one vote count per party.", nameof(districts));
                 for (int p = 0; p < parties.Length; p++) PartyVotes[p] += d.PartyVotes[p];
-                if (d.WinnerIndex >= 0) DistrictsWon[d.WinnerIndex]++;
+                if (d.WinnerIndex >= 0 && d.IsSeat) DistrictsWon[d.WinnerIndex]++;
                 Votes += d.Votes;
                 Eligible += d.Eligible;
             }

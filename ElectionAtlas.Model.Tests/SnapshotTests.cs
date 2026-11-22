@@ -37,6 +37,26 @@ namespace ElectionAtlas.Model.Tests
         }
 
         [Fact]
+        public void Capture_DoesNotCountTheOutsideBucketAsADistrictWon()
+        {
+            var table = new GroupTable(2, new[]
+            {
+                new VoterGroup(0, AgeBand.Adult, 0, 0, JobSector.Unemployed, 300, 50f),
+                new VoterGroup(1, AgeBand.Adult, 4, 3, JobSector.Office, 5000, 50f),
+            });
+            var districts = new[] { new DistrictInfo(1000, "Old Town"), DistrictInfo.Outside };
+            var result = ElectionModel.RunElection(table, TestCity.TwoParties, null, GoverningRule.MostDistricts,
+                TurnoutPreset.UsGeneral, Cfg, 3, default, DistrictInfo.IndexOfOutside(districts));
+
+            var snap = ElectionSnapshot.Capture(result, TestCity.TwoParties, districts, 1, 2031, 4, Cfg.Map);
+
+            Assert.Equal(new[] { 1, 0 }, snap.DistrictsWon);
+            Assert.False(snap.Districts[1].IsSeat);
+            Assert.True(snap.Districts[0].IsSeat);
+            Assert.Equal(DistrictInfo.OutsideName, snap.Districts[1].Name);
+        }
+
+        [Fact]
         public void Capture_FreezesThePartyLineup()
         {
             var (_, snap) = RunAndCapture(TestCity.PoorAndRich());

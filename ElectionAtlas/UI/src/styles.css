@@ -174,3 +174,4 @@
 .ea-dim { color: rgba(255, 255, 255, 0.72); }
 .ea-pager { display: flex; align-items: center; justify-content: space-between; margin-top: 10rem; }
 .ea-pager__label { text-align: center; }
+.ea-tr--outside { margin-top: 8rem; background-color: rgba(255, 255, 255, 0.04); border-left-color: rgba(255, 255, 255, 0.15); border-style: solid; }

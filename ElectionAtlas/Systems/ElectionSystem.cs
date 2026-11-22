@@ -180,7 +180,8 @@ namespace ElectionAtlas.Systems
                 int number = Ledger.Archive.NextNumber;
                 var result = ElectionModel.RunElection(table, parties, Ledger.GoverningPartyId,
                     settings?.GoverningRule ?? GoverningRule.PopularVote, settings?.TurnoutPreset ?? TurnoutPreset.UsGeneral,
-                    m_Config, ElectionModel.MakeSeed(Ledger.UnlockedMonth, number), condition);
+                    m_Config, ElectionModel.MakeSeed(Ledger.UnlockedMonth, number), condition,
+                    DistrictInfo.IndexOfOutside(districts));
                 var snapshot = ElectionSnapshot.Capture(result, parties, districts, number,
                     ElectionSchedule.YearOf(month), ElectionSchedule.MonthOf(month), m_Config.Map);
 

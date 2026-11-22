@@ -23,7 +23,7 @@ namespace ElectionAtlas.Dev
     public sealed class VoterReading
     {
         public GroupTable Table;
-        public string[] DistrictNames;          // index = district index; the last one is "Unassigned"
+        public string[] DistrictNames;          // index = district index; the last one is the outside-any-district bucket
         public DistrictInfo[] Districts;        // same order; Id packs entity index and version (-1 = Unassigned)
         public int Households;
         public int[] WealthSorted;
@@ -94,7 +94,7 @@ namespace ElectionAtlas.Dev
             bool hasTime = collectAges && !m_TimeDataQuery.IsEmptyIgnoreFilter;
             TimeData timeData = hasTime ? m_TimeDataQuery.GetSingleton<TimeData>() : default;
 
-            // Districts: index 0..n-1 by entity, index n = "Unassigned".
+            // Districts: index 0..n-1 by entity, index n = outside any district.
             var districtIndex = new Dictionary<Entity, int>();
             var names = new List<string>();
             var infos = new List<DistrictInfo>();
@@ -109,8 +109,8 @@ namespace ElectionAtlas.Dev
                 }
             }
             int unassigned = names.Count;
-            names.Add("Unassigned");
-            infos.Add(new DistrictInfo(-1, "Unassigned"));
+            names.Add(DistrictInfo.OutsideName);
+            infos.Add(DistrictInfo.Outside);
             int districtCount = names.Count;
 
             r.DistrictNames = names.ToArray();

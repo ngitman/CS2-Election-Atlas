@@ -85,6 +85,15 @@
 		Its order is pinned explicitly: an overriding target would otherwise run after DeployWIP and ship an
 		unprocessed DLL.
 	-->
+	<!-- DeployWIP deletes the mod folder before copying. While the game runs it holds the Burst DLL, so the delete
+		fails halfway and leaves the running game without its UI files. Refuse up front instead. -->
+	<Target Name="RefuseDeployWhileGameRuns" BeforeTargets="DeployWIP" Condition="'$(HasModToolchain)' == 'true' And '$(NeedBuild)' == 'true'">
+		<Exec Command="powershell -NoProfile -Command &quot;if (Get-Process -Name Cities2 -ErrorAction SilentlyContinue) { exit 3 }&quot;" IgnoreExitCode="true" StandardOutputImportance="low">
+			<Output TaskParameter="ExitCode" PropertyName="GameRunningCode" />
+		</Exec>
+		<Error Condition="'$(GameRunningCode)' == '3'" Text="Cities: Skylines II is running and holds the mod's files, so deploying would leave the mod folder half-deleted. Close the game (or use tools\dev.ps1 -Restart) and build again." />
+	</Target>
+
 	<Target Name="RunModPostProcessor" AfterTargets="ModPostProcessorConfig" BeforeTargets="DeployWIP" Condition="'$(HasModToolchain)' == 'true' And '$(NeedBuild)' == 'true'">
 		<Error Condition="!Exists('$(ModPostProcessorFullPath)')" Text="Post processor not found, please check the path: $(ModPostProcessorFullPath)" />
 		<Message Text="Run post processor: $(ModPostProcessorArgs)" Importance="high" />

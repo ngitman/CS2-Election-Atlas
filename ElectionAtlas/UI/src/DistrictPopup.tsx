@@ -24,7 +24,11 @@ export const DistrictPopup = ({ d, o, id, onClose }: { d: Districts | null; o: O
   return (
     <Panel draggable header={district.name} initialPosition={{ x: 0.82, y: 0.3 }} onClose={onClose} style={{ width: "380rem" }}>
       <div className="ea-body">
-        {winner && district.votes > 0 ? (
+        {district.id === -1 ? (
+          <div className="ea-hero__caption ea-muted">
+            {`Residents whose homes are outside every drawn district. Their votes count toward the city total in election ${d.number}, but there is no seat here to win.`}
+          </div>
+        ) : winner && district.votes > 0 ? (
           <>
             <div className="ea-hero" style={{ color: winner.color }}>
               {pct(district.winnerShare)}

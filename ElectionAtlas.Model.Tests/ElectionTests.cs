@@ -107,6 +107,44 @@ namespace ElectionAtlas.Model.Tests
         }
 
         [Fact]
+        public void GoverningRule_MostDistricts_IgnoresResidentsOutsideAnyDistrict()
+        {
+            // Left wins the one real district. Right wins the outside bucket by a lot, so it leads the popular vote
+            // and would take a 1-1 seat tie on it, but the outside bucket is not a seat.
+            var table = new GroupTable(2, new[]
+            {
+                new VoterGroup(0, AgeBand.Adult, 0, 0, JobSector.Unemployed, 300, 50f),
+                new VoterGroup(1, AgeBand.Adult, 4, 3, JobSector.Office, 5000, 50f),
+            });
+
+            var result = ElectionModel.RunElection(table, TestCity.TwoParties, null, GoverningRule.MostDistricts,
+                TurnoutPreset.UsGeneral, Cfg, 7, default, outsideDistrict: 1);
+
+            Assert.Equal(1, result.Districts[1].WinnerIndex);       // Right carries the outside bucket...
+            Assert.Equal(new[] { 1, 0 }, result.DistrictsWon);       // ...but it is not a seat
+            Assert.Equal("left", result.GoverningPartyId);
+            Assert.True(result.PartyVotes[1] > result.PartyVotes[0]); // its votes still count citywide
+        }
+
+        [Fact]
+        public void ResidentsOutsideAnyDistrict_StillCountInThePopularVote()
+        {
+            var table = new GroupTable(2, new[]
+            {
+                new VoterGroup(0, AgeBand.Adult, 0, 0, JobSector.Unemployed, 300, 50f),
+                new VoterGroup(1, AgeBand.Adult, 4, 3, JobSector.Office, 5000, 50f),
+            });
+
+            var with = ElectionModel.RunElection(table, TestCity.TwoParties, null, GoverningRule.PopularVote,
+                TurnoutPreset.UsGeneral, Cfg, 7, default, outsideDistrict: 1);
+            var without = ElectionModel.RunElection(table, TestCity.TwoParties, null, GoverningRule.PopularVote,
+                TurnoutPreset.UsGeneral, Cfg, 7);
+
+            Assert.Equal(without.PartyVotes, with.PartyVotes);
+            Assert.Equal("right", with.GoverningPartyId);
+        }
+
+        [Fact]
         public void AHappyCity_FavorsTheIncumbent()
         {
             var unhappy = Run(TestCity.PoorAndRich(happiness: 15f), incumbent: "right");

@@ -24,7 +24,8 @@ namespace ElectionAtlas.Model
             TurnoutPreset preset,
             ModelConfig cfg,
             ulong seed,
-            GovernmentCondition condition = default)
+            GovernmentCondition condition = default,
+            int outsideDistrict = -1)
         {
             ValidateInputs(table, parties, cfg);
             int partyCount = parties.Count;
@@ -74,7 +75,8 @@ namespace ElectionAtlas.Model
                 }
 
                 int winner = TopIndex(partyVotes, out int runnerUp);
-                if (winner >= 0) districtsWon[winner]++;
+                // Residents outside every district vote in the city total, but that bucket is not a seat.
+                if (winner >= 0 && d != outsideDistrict) districtsWon[winner]++;
 
                 districts[d] = new DistrictResult
                 {

@@ -52,6 +52,8 @@ export const DistrictsTab = ({ d, onOpen, openId }: { d: Districts | null; onOpe
 
 type SortKey = "name" | "margin" | "turnout" | "approval" | number;
 const PAGE_SIZE = 8;
+/** Must match DistrictInfo.OutsideId in C#. */
+const OUTSIDE_ID = -1;
 
 /** Every district as a row: each party's share as a column, then margin, turnout and approval.
  *  Rows are tinted with the district's map color (the winner's color, stronger for safer seats). */
@@ -69,7 +71,10 @@ const DistrictTable = ({
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "name", desc: false });
   const [page, setPage] = useState(0);
   const parties = d.parties ?? [];
-  const rows = d.districts ?? [];
+  // Residents outside every drawn district: counted citywide, never a seat, so pinned below the districts.
+  const all = d.districts ?? [];
+  const rows = all.filter((x) => x.id !== OUTSIDE_ID);
+  const outside = all.find((x) => x.id === OUTSIDE_ID && x.eligible > 0);
 
   const share = (x: DistrictView, i: number) => (x.votes > 0 ? (x.partyVotes[i] ?? 0) / x.votes : 0);
   const value = (x: DistrictView): number | string => {
@@ -101,6 +106,24 @@ const DistrictTable = ({
     </div>
   );
 
+  const Cells = ({ x }: { x: DistrictView }) => {
+    const voted = x.votes > 0 && x.winner >= 0;
+    const seat = x.id !== OUTSIDE_ID;
+    return (
+      <>
+        <div className={seat ? "ea-td ea-td--name ea-bold" : "ea-td ea-td--name ea-dim"}>{x.name}</div>
+        {parties.map((p, i) => (
+          <div key={p.id} className={voted && seat && i === x.winner ? "ea-td ea-td--num ea-bold" : "ea-td ea-td--num ea-dim"}>
+            {voted ? pct(share(x, i)) : "-"}
+          </div>
+        ))}
+        <div className="ea-td ea-td--num">{voted && seat ? `+${(x.margin * 100).toFixed(1)}` : "-"}</div>
+        <div className="ea-td ea-td--num">{pct(x.turnout)}</div>
+        <div className="ea-td ea-td--num">{approvalPct(x.approval)}</div>
+      </>
+    );
+  };
+
   return (
     <div className="ea-table">
       <div className="ea-tr ea-tr--head">
@@ -123,18 +146,19 @@ const DistrictTable = ({
             style={{ backgroundColor: voted ? withAlpha(x.color, 0.32) : "rgba(255, 255, 255, 0.03)", borderLeftColor: voted ? x.color : "rgba(255, 255, 255, 0.15)" }}
             onClick={() => onOpen(x.id)}
           >
-            <div className="ea-td ea-td--name ea-bold">{x.name}</div>
-            {parties.map((p, i) => (
-              <div key={p.id} className={voted && i === x.winner ? "ea-td ea-td--num ea-bold" : "ea-td ea-td--num ea-dim"}>
-                {voted ? pct(share(x, i)) : "-"}
-              </div>
-            ))}
-            <div className="ea-td ea-td--num">{voted ? `+${(x.margin * 100).toFixed(1)}` : "-"}</div>
-            <div className="ea-td ea-td--num">{pct(x.turnout)}</div>
-            <div className="ea-td ea-td--num">{approvalPct(x.approval)}</div>
+            <Cells x={x} />
           </div>
         );
       })}
+
+      {outside ? (
+        <div
+          className={openId === outside.id ? "ea-tr ea-tr--row ea-tr--outside ea-tr--active" : "ea-tr ea-tr--row ea-tr--outside"}
+          onClick={() => onOpen(outside.id)}
+        >
+          <Cells x={outside} />
+        </div>
+      ) : null}
 
       {pages > 1 ? (
         <div className="ea-pager">
@@ -147,7 +171,7 @@ const DistrictTable = ({
           </div>
         </div>
       ) : (
-        <div className="ea-pager__label ea-muted ea-small" style={{ marginTop: "6rem" }}>{`${sorted.length} districts · click a row for details`}</div>
+        <div className="ea-pager__label ea-muted ea-small" style={{ marginTop: "6rem" }}>{`${sorted.length} ${sorted.length === 1 ? "district" : "districts"} · click a row for details`}</div>
       )}
     </div>
   );

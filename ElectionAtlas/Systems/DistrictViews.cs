@@ -80,7 +80,7 @@ namespace ElectionAtlas.Systems
             var view = new DistrictView
             {
                 Id = d.DistrictId,
-                Name = d.Name,
+                Name = d.IsSeat ? d.Name : DistrictInfo.OutsideName, // older saves called it "Unassigned"
                 Eligible = d.Eligible,
                 Votes = d.Votes,
                 Turnout = d.Turnout,
