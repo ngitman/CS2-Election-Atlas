@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { trigger, useValue } from "cs2/api";
 import { Panel, Scrollable } from "cs2/ui";
-import { districts$, GROUP, history$, mapView$, overview$, panelOpen$, polls$ } from "./bindings";
+import { citySession$, districts$, GROUP, history$, mapView$, overview$, panelOpen$, polls$ } from "./bindings";
 import { DevSection } from "./DevSection";
 import { DistrictPopup } from "./DistrictPopup";
 import { DistrictsTab } from "./DistrictsTab";
@@ -19,6 +19,11 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export const ElectionsPanel = () => {
+  const citySession = useValue(citySession$);
+  return <CityElectionsPanel key={citySession} />;
+};
+
+const CityElectionsPanel = () => {
   const open = useValue(panelOpen$);
   const mapView = useValue(mapView$);
   const overview = useValue(overview$);
@@ -29,14 +34,19 @@ export const ElectionsPanel = () => {
   const [districtId, setDistrictId] = useState<number | null>(null);
   if (!open) return null;
 
+  const city = overview?.cityName;
+  const save = overview?.loadedSaveName;
+  const cityContext = city && save && city !== save ? `${city} · Loaded save: ${save}` : city || save;
+
   // Map view: the panel collapses to a small legend so the colored districts are visible.
   // The tab, popup choice and sort survive (state lives here), so "Back to results" returns where you were.
-  if (mapView) return <MapLegend d={districts} />;
+  if (mapView) return <MapLegend d={districts} cityContext={cityContext} />;
 
   return (
     <>
       <Panel draggable header="Elections" initialPosition={{ x: 0.42, y: 0.25 }} onClose={() => trigger(GROUP, "closePanel")} style={{ width: "580rem" }}>
         <div className="ea-body">
+          {cityContext ? <div className="ea-muted ea-small ea-ellipsis ea-city-context" title={cityContext}>{cityContext}</div> : null}
           <GovernmentStrip o={overview} />
 
           <div className="ea-tabs">

@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
+using Colossal.Serialization.Entities;
 using Colossal.UI.Binding;
 using ElectionAtlas.Model;
+using Game;
 using Game.UI;
 
 namespace ElectionAtlas.Systems
@@ -20,6 +22,7 @@ namespace ElectionAtlas.Systems
         private ElectionSystem m_Elections;
 
         private ValueBinding<bool> m_PanelOpen;
+        private ValueBinding<int> m_CitySession;
         private ValueBinding<string> m_GovernmentState;
         // Raw bindings: written straight into the UI with the game's JSON writer, no strings to build or parse.
         private RawValueBinding m_Overview;
@@ -39,6 +42,7 @@ namespace ElectionAtlas.Systems
             m_Elections = World.GetOrCreateSystemManaged<ElectionSystem>();
 
             AddBinding(m_PanelOpen = new ValueBinding<bool>(kGroup, "panelOpen", false));
+            AddBinding(m_CitySession = new ValueBinding<int>(kGroup, "citySession", 0));
             AddBinding(m_GovernmentState = new ValueBinding<string>(kGroup, "governmentState", nameof(GovernmentState.NoCityHall)));
             AddBinding(m_Overview = new RawValueBinding(kGroup, "overview", Guarded("overview", WriteOverview)));
             AddBinding(m_Districts = new RawValueBinding(kGroup, "districts", Guarded("districts", WriteDistricts)));
@@ -57,9 +61,19 @@ namespace ElectionAtlas.Systems
             Mod.Log.Info("Elections UI bindings registered");
         }
 
+        protected override void OnGamePreload(Purpose purpose, GameMode mode)
+        {
+            base.OnGamePreload(purpose, mode);
+            ClosePanel();
+            m_ElectionIndex = -1;
+            Invalidate();
+            m_CitySession.Update(m_CitySession.value + 1);
+        }
+
         protected override void OnUpdate()
         {
             base.OnUpdate();
+            if (!m_Elections.HasLoadedCity) return;
 
             // Only touch the binding when the state changes (Enum.ToString allocates).
             var state = m_CityHall.State;
@@ -69,28 +83,27 @@ namespace ElectionAtlas.Systems
                 m_GovernmentState.Update(state.ToString());
             }
 
-            if (m_CityHall.PendingUnlockNotice)
-            {
-                m_CityHall.PendingUnlockNotice = false;
-                m_PanelOpen.Update(true);
-            }
-
+            bool opening = m_CityHall.PendingUnlockNotice || m_Elections.PendingResultNotice;
+            m_CityHall.PendingUnlockNotice = false;
             if (m_Elections.PendingResultNotice)
             {
                 m_Elections.PendingResultNotice = false;
                 m_ElectionIndex = -1;
                 Invalidate();
-                m_PanelOpen.Update(true);
             }
 
-            if (!m_PanelOpen.value)
-                return;
+            if (!m_PanelOpen.value && !opening) return;
+            RefreshPanel();
+            if (opening) m_PanelOpen.Update(true);
+        }
 
+        private void RefreshPanel()
+        {
             RefreshPartyEditor();
 
             // Rebuild only when something shown has changed.
             long key = m_Elections.DataVersion;
-            key = key * 31 + (int)state;
+            key = key * 31 + (int)m_CityHall.State;
             key = key * 31 + (int)(m_CityHall.Efficiency * 100f);
             key = key * 31 + (m_CityHall.IsShutDown ? 1 : 0) + (m_CityHall.SwitchedOff ? 2 : 0);
             key = key * 31 + m_CityHall.CityHallCount;
@@ -108,16 +121,17 @@ namespace ElectionAtlas.Systems
 
         private void Invalidate() => m_LastKey = long.MinValue;
 
-        public bool PanelOpen => m_PanelOpen.value;
+        public bool PanelOpen => m_Elections.HasLoadedCity && m_PanelOpen.value;
 
         /// <summary>The panel is collapsed to the map legend and districts are colored by result.</summary>
-        public bool MapView => m_PanelOpen.value && m_MapView.value;
+        public bool MapView => PanelOpen && m_MapView.value;
 
         /// <summary>The election the Districts tab is showing (the latest unless the player stepped back).</summary>
         public ElectionSnapshot ShownElection
         {
             get
             {
+                if (!m_Elections.HasLoadedCity) return null;
                 var archive = m_Elections.Ledger.Archive;
                 if (archive.Count == 0) return null;
                 return m_ElectionIndex < 0 || m_ElectionIndex >= archive.Count ? archive.Latest : archive[m_ElectionIndex];
@@ -127,9 +141,16 @@ namespace ElectionAtlas.Systems
 
         private void TogglePanel()
         {
-            if (m_PanelOpen.value) ClosePanel();
-            else m_PanelOpen.Update(true);
+            if (!m_Elections.HasLoadedCity) return;
+            if (m_PanelOpen.value)
+            {
+                ClosePanel();
+                return;
+            }
+
             Invalidate();
+            RefreshPanel();
+            m_PanelOpen.Update(true);
         }
 
         /// <summary>Closing the panel (or the map legend) also ends the map view, so the overlay goes with it.</summary>
@@ -176,7 +197,9 @@ namespace ElectionAtlas.Systems
             var governing = parties.FirstOrDefault(p => p.Id == ledger.GoverningPartyId);
             var poll = ledger.Polls.Latest;
 
-            w.TypeBegin("ElectionAtlas.Overview");
+            w.TypeBegin("ElectionAtlas.CityOverview");
+            w.Prop("cityName", m_Elections.CityName);
+            w.Prop("loadedSaveName", m_Elections.LoadedSaveName);
             w.Prop("state", m_CityHall.State.ToString());
             w.Prop("today", now);
             w.Prop("cityHalls", m_CityHall.CityHallCount);
@@ -187,7 +210,7 @@ namespace ElectionAtlas.Systems
             w.Prop("nextElection", ledger.NextElectionMonth == ElectionSchedule.NotScheduled ? -1 : ledger.NextElectionMonth);
             w.Prop("monthsUntil", ElectionSchedule.MonthsUntil(now, ledger.NextElectionMonth));
             w.Prop("elections", ledger.Archive.Count);
-            w.Prop("reading", m_Elections.IsReading);
+            w.Prop("reading", m_Elections.IsCountingElection);
             w.Prop("devMonthOffset", m_Elections.DevMonthOffset);
 
             w.PropertyName("governing");

@@ -8,11 +8,12 @@ import { Dot, ElectionPicker, StackBar } from "./parts";
  * The panel collapsed for the map view: which election the map shows, what the colors mean, and the way back.
  * Closing it ends the map view (the colors go with it).
  */
-export const MapLegend = ({ d }: { d: Districts | null }) => {
+export const MapLegend = ({ d, cityContext }: { d: Districts | null; cityContext?: string | null }) => {
   const parties = d?.parties ?? [];
   return (
     <Panel draggable header="Election map" initialPosition={{ x: 0.02, y: 0.2 }} onClose={() => trigger(GROUP, "closePanel")} style={{ width: "300rem" }}>
       <div className="ea-body">
+        {cityContext ? <div className="ea-muted ea-small ea-ellipsis ea-city-context" title={cityContext}>{cityContext}</div> : null}
         {d && d.count ? (
           <>
             <ElectionPicker d={d} />

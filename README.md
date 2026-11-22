@@ -153,7 +153,7 @@ A folder argument uses its newest CSV. `--preset`, `--rule`, `--incumbent` and `
 ## Notes
 
 - `UI/types/cs2.d.ts` is a minimal hand-written shim for `cs2/modding`, `cs2/api` and `cs2/ui`, with prop names checked against the game's UI bundle (game 1.6.4). Swap it for the toolchain's typings once installed.
-- `PublishConfiguration.xml` points at `Properties/Thumbnail.png`, which doesn't exist yet. Add one before the first publish.
+- `PublishConfiguration.xml` uses the [publish thumbnail](ElectionAtlas/Properties/Thumbnail.png).
 - Performance rule for every later phase: no per-frame work, no components added to citizens, and Burst jobs that only read game data. Targets: about 0 ms per frame between polls, under 100 ms per election (spread over frames), under 100 KB added to a save.
 
 ## License

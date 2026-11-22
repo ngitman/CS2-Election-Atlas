@@ -45,6 +45,8 @@ export interface ElectionSummary {
 }
 
 export interface Overview {
+  cityName?: string | null;
+  loadedSaveName?: string | null;
   state: GovernmentState;
   today: number;
   cityHalls: number;
@@ -100,6 +102,7 @@ export interface Polls {
 }
 
 export const panelOpen$ = bindValue<boolean>(GROUP, "panelOpen", false);
+export const citySession$ = bindValue<number>(GROUP, "citySession", 0);
 export const governmentState$ = bindValue<GovernmentState>(GROUP, "governmentState", "NoCityHall");
 // Raw bindings: C# writes these objects straight into the UI (no JSON strings to parse).
 export const overview$ = bindValue<Overview | null>(GROUP, "overview", null);

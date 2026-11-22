@@ -1,3 +1,5 @@
+using System;
+
 namespace ElectionAtlas.Model
 {
     /// <summary>What a month tick asks the game side to run.</summary>
@@ -23,8 +25,12 @@ namespace ElectionAtlas.Model
     /// </summary>
     public sealed class ElectionLedger
     {
-        /// <summary>Save format. 1: ledger, elections, polls. 2: adds an "includes data" flag after the version.</summary>
-        public const int CurrentVersion = 2;
+        /// <summary>
+        /// Save format. 1: ledger, elections, polls. 2: adds an "includes data" flag after the version. 3: adds a
+        /// district table after the flag (each live district entity with its id at save time), so ids can be mapped
+        /// to the renumbered entities on load.
+        /// </summary>
+        public const int CurrentVersion = 3;
 
         public GovernmentState State = GovernmentState.NoCityHall;
         public int UnlockedMonth = ElectionSchedule.NotScheduled;
@@ -126,6 +132,24 @@ namespace ElectionAtlas.Model
             int step = ElectionSchedule.MonthsBetween(cadence);
             while (NextElectionMonth <= now)
                 NextElectionMonth += step;
+        }
+
+        /// <summary>
+        /// Replaces every district id in the archive and the polls with <paramref name="remap"/>'s, as copies (the
+        /// records themselves are immutable). Everything else, including which polls keep district detail, is kept.
+        /// </summary>
+        public void RemapDistricts(DistrictRemap remap)
+        {
+            if (remap == null) throw new ArgumentNullException(nameof(remap));
+
+            var archive = new ElectionArchive();
+            foreach (var election in Archive.All) archive.Add(election.WithDistrictIds(remap));
+
+            var polls = new PollHistory(Polls.Capacity, Polls.DistrictWindow);
+            foreach (var record in Polls.Records) polls.Add(record.WithDistrictIds(remap));
+
+            Archive = archive;
+            Polls = polls;
         }
 
         /// <summary>Starts over (new city, or a dev reset).</summary>

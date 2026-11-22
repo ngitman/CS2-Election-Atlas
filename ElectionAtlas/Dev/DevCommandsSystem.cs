@@ -3,10 +3,12 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Colossal.Serialization.Entities;
 using Colossal.UI.Binding;
 using ElectionAtlas.Diagnostics;
 using ElectionAtlas.Model;
 using ElectionAtlas.Systems;
+using Game;
 using Game.Simulation;
 using Game.UI;
 using UnityEngine;
@@ -52,6 +54,12 @@ namespace ElectionAtlas.Dev
             AddBinding(new TriggerBinding<string>(kGroup, "devSetGovernment", s => Run("set government", () => SetGovernment(s))));
 
             Mod.Log.Info("[dev] developer commands registered");
+        }
+
+        protected override void OnGamePreload(Purpose purpose, GameMode mode)
+        {
+            base.OnGamePreload(purpose, mode);
+            m_Status.Update("Developer tools ready.");
         }
 
         // ---------------------------------------------------------------- commands
@@ -139,6 +147,12 @@ namespace ElectionAtlas.Dev
 
         private void Run(string name, Func<string> command)
         {
+            if (!m_Elections.HasLoadedCity)
+            {
+                m_Status.Update("Load a city first.");
+                return;
+            }
+
             try
             {
                 m_Status.Update(command());

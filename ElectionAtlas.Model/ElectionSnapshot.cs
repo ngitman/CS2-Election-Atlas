@@ -44,6 +44,21 @@ namespace ElectionAtlas.Model
 
         public bool IsSeat => Id != OutsideId;
 
+        /// <summary>
+        /// The first id given to a district that no longer exists in the city (see <see cref="DistrictRemap"/>); the
+        /// n-th one is this plus n. The mod's ids for live districts are always positive (the entity version, at least
+        /// 1, sits in the high 32 bits) and the outside bucket is -1, so these never collide with either. Read as an
+        /// entity they have version -1, which no entity has. They stay far inside 2^53, so the UI's JavaScript
+        /// numbers keep them distinct.
+        /// </summary>
+        public const long FirstDissolvedId = -(1L << 32);
+
+        public static long DissolvedId(int n)
+        {
+            if (n < 0) throw new ArgumentOutOfRangeException(nameof(n));
+            return FirstDissolvedId + n;
+        }
+
         public static DistrictInfo Outside => new DistrictInfo(OutsideId, OutsideName);
 
         /// <summary>Index of the outside bucket in <paramref name="districts"/>, or -1 if there is none.</summary>
@@ -88,6 +103,9 @@ namespace ElectionAtlas.Model
 
         /// <summary>False for the outside-any-district bucket: its votes count citywide, but nobody wins it.</summary>
         public bool IsSeat => DistrictId != DistrictInfo.OutsideId;
+
+        internal DistrictSnapshot WithId(long districtId) =>
+            districtId == DistrictId ? this : new DistrictSnapshot(districtId, Name, Eligible, PartyVotes, WinnerIndex, Margin, MapColor);
     }
 
     /// <summary>
@@ -157,6 +175,13 @@ namespace ElectionAtlas.Model
         public float Share(int partyIndex) => Votes > 0 ? (float)((double)PartyVotes[partyIndex] / Votes) : 0f;
 
         public PartySnapshot GoverningParty => GoverningPartyIndex >= 0 ? Parties[GoverningPartyIndex] : null;
+
+        internal ElectionSnapshot WithDistrictIds(DistrictRemap remap)
+        {
+            var districts = new DistrictSnapshot[Districts.Length];
+            for (int i = 0; i < districts.Length; i++) districts[i] = Districts[i].WithId(remap.Map(Districts[i].DistrictId));
+            return new ElectionSnapshot(Number, Year, Month, Rule, Seed, TargetTurnout, GoverningPartyIndex, Parties, districts);
+        }
 
         /// <summary>
         /// Freezes an election result. <paramref name="parties"/> must be the lineup the election ran with, and
