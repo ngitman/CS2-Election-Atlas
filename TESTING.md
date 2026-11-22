@@ -42,7 +42,7 @@ Options → Election Atlas:
 
 ## F. Performance
 
-At each month change `ElectionAtlas.Mod.log` logs "read N ms over 16 slices, model N ms". Note any stutter you see at month changes.
+At each month change `ElectionAtlas.Mod.log` logs how many households the census read and in how many worker slices ("census from last month", or "on the spot" right after loading), and the model time. Note any stutter you see, at month changes or in the last quarter of a month. The dev **Benchmark readers** button logs the full-read time, the per-slice worker time and the model time on your city.
 
 ## G. Saving (experimental — use a copy of a city)
 

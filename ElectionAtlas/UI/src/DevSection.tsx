@@ -50,6 +50,7 @@ export const DevSection = () => {
             <Cmd label="Switch parties" command="devSwitchParties" />
             <Cmd label="Spike report" command="devSpikeReport" />
             <Cmd label="Export city CSV" command="devExportCity" />
+            <Cmd label="Benchmark readers" command="devBenchmark" />
           </div>
           <div className="ea-actions" style={{ marginTop: "0" }}>
             {STATES.map((s) => (

@@ -38,6 +38,7 @@ namespace ElectionAtlas
             updateSystem.UpdateAt<ElectionsUISystem>(SystemUpdatePhase.UIUpdate);
             // "Election" section in the game's own info panel when a district is selected in the city.
             updateSystem.UpdateAt<DistrictElectionSection>(SystemUpdatePhase.UIUpdate);
+            updateSystem.UpdateAt<ElectionMapSystem>(SystemUpdatePhase.UIUpdate);
 
 #if DEV_TOOLS
             // Developer tools: never in Release builds (DEV_TOOLS is off there, and publishing refuses a build with it).

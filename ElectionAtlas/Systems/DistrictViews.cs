@@ -20,10 +20,10 @@ namespace ElectionAtlas.Systems
         public bool HasApproval;
         public float Approval;
         public float[] Trend; // oldest first; NaN where the district wasn't polled
+        public DistrictProfile Profile; // what kind of place it is now (Unknown until a read has seen it)
 
-        public bool CanSelect => Id >= 0;
-        public int EntityIndex => (int)(Id & 0xFFFFFFFF);
-        public int EntityVersion => (int)(Id >> 32);
+        /// <summary>False for the outside-any-district bucket: no seat, and nothing on the map to select.</summary>
+        public bool IsSeat => Id != DistrictInfo.OutsideId;
 
         public float Share(int party) => Votes > 0 && PartyVotes != null && party < PartyVotes.Length ? (float)((double)PartyVotes[party] / Votes) : 0f;
     }
@@ -33,7 +33,7 @@ namespace ElectionAtlas.Systems
     {
         public const int TrendMonths = 12;
 
-        public static List<DistrictView> ForElection(ElectionLedger ledger, ElectionSnapshot election)
+        public static List<DistrictView> ForElection(ElectionLedger ledger, ElectionSnapshot election, IReadOnlyDictionary<long, DistrictProfile> profiles)
         {
             var list = new List<DistrictView>();
             if (election == null) return list;
@@ -43,6 +43,7 @@ namespace ElectionAtlas.Systems
                 if (d.Eligible <= 0) continue;
                 var view = FromSnapshot(d);
                 AddApproval(view, ledger);
+                view.Profile = ProfileOf(profiles, view.Id);
                 list.Add(view);
             }
 
@@ -51,7 +52,8 @@ namespace ElectionAtlas.Systems
         }
 
         /// <summary>The district's result in the latest election that included it, plus its approval. Null if it has neither.</summary>
-        public static DistrictView ForDistrict(ElectionLedger ledger, long id, string fallbackName, out ElectionSnapshot election)
+        public static DistrictView ForDistrict(ElectionLedger ledger, long id, string fallbackName,
+            IReadOnlyDictionary<long, DistrictProfile> profiles, out ElectionSnapshot election)
         {
             election = null;
             DistrictView view = null;
@@ -72,15 +74,19 @@ namespace ElectionAtlas.Systems
                 view = new DistrictView { Id = id, Name = fallbackName };
 
             AddApproval(view, ledger);
+            view.Profile = ProfileOf(profiles, id);
             return view.HasApproval || election != null ? view : null;
         }
+
+        private static DistrictProfile ProfileOf(IReadOnlyDictionary<long, DistrictProfile> profiles, long id) =>
+            profiles != null && profiles.TryGetValue(id, out var p) ? p : DistrictProfile.Unknown;
 
         private static DistrictView FromSnapshot(DistrictSnapshot d)
         {
             var view = new DistrictView
             {
                 Id = d.DistrictId,
-                Name = d.IsSeat ? d.Name : DistrictInfo.OutsideName, // older saves called it "Unassigned"
+                Name = d.IsSeat ? d.Name : DistrictInfo.OutsideName, // older results called it "Unassigned"
                 Eligible = d.Eligible,
                 Votes = d.Votes,
                 Turnout = d.Turnout,

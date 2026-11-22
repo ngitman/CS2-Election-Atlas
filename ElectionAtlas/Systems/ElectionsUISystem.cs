@@ -21,10 +21,12 @@ namespace ElectionAtlas.Systems
 
         private ValueBinding<bool> m_PanelOpen;
         private ValueBinding<string> m_GovernmentState;
-        private ValueBinding<string> m_Overview;
-        private ValueBinding<string> m_Districts;
-        private ValueBinding<string> m_History;
-        private ValueBinding<string> m_Polls;
+        // Raw bindings: written straight into the UI with the game's JSON writer, no strings to build or parse.
+        private RawValueBinding m_Overview;
+        private RawValueBinding m_Districts;
+        private RawValueBinding m_History;
+        private RawValueBinding m_Polls;
+        private ValueBinding<bool> m_MapView;
 
         private GovernmentState m_LastState = GovernmentState.NoCityHall;
         private int m_ElectionIndex = -1; // -1 = latest
@@ -38,15 +40,18 @@ namespace ElectionAtlas.Systems
 
             AddBinding(m_PanelOpen = new ValueBinding<bool>(kGroup, "panelOpen", false));
             AddBinding(m_GovernmentState = new ValueBinding<string>(kGroup, "governmentState", nameof(GovernmentState.NoCityHall)));
-            AddBinding(m_Overview = new ValueBinding<string>(kGroup, "overview", "{}"));
-            AddBinding(m_Districts = new ValueBinding<string>(kGroup, "districts", "{}"));
-            AddBinding(m_History = new ValueBinding<string>(kGroup, "history", "{}"));
-            AddBinding(m_Polls = new ValueBinding<string>(kGroup, "polls", "{}"));
+            AddBinding(m_Overview = new RawValueBinding(kGroup, "overview", Guarded("overview", WriteOverview)));
+            AddBinding(m_Districts = new RawValueBinding(kGroup, "districts", Guarded("districts", WriteDistricts)));
+            AddBinding(m_History = new RawValueBinding(kGroup, "history", Guarded("history", WriteHistory)));
+            AddBinding(m_Polls = new RawValueBinding(kGroup, "polls", Guarded("polls", WritePolls)));
 
             AddBinding(new TriggerBinding(kGroup, "togglePanel", TogglePanel));
             AddBinding(new TriggerBinding(kGroup, "closePanel", ClosePanel));
             AddBinding(new TriggerBinding<int>(kGroup, "stepElection", StepElection));
             AddBinding(new TriggerBinding<int>(kGroup, "showElection", ShowElection));
+            AddBinding(m_MapView = new ValueBinding<bool>(kGroup, "mapView", false));
+            AddBinding(new TriggerBinding(kGroup, "showMap", () => m_MapView.Update(true)));
+            AddBinding(new TriggerBinding(kGroup, "hideMap", () => m_MapView.Update(false)));
 
             Mod.Log.Info("Elections UI bindings registered");
         }
@@ -92,21 +97,44 @@ namespace ElectionAtlas.Systems
                 return;
             m_LastKey = key;
 
-            m_Overview.Update(BuildOverview());
-            m_Districts.Update(BuildDistricts());
-            m_History.Update(BuildHistory());
-            m_Polls.Update(BuildPolls());
+            m_Overview.Update();
+            m_Districts.Update();
+            m_History.Update();
+            m_Polls.Update();
         }
 
         private void Invalidate() => m_LastKey = long.MinValue;
 
+        public bool PanelOpen => m_PanelOpen.value;
+
+        /// <summary>The panel is collapsed to the map legend and districts are colored by result.</summary>
+        public bool MapView => m_PanelOpen.value && m_MapView.value;
+
+        /// <summary>The election the Districts tab is showing (the latest unless the player stepped back).</summary>
+        public ElectionSnapshot ShownElection
+        {
+            get
+            {
+                var archive = m_Elections.Ledger.Archive;
+                if (archive.Count == 0) return null;
+                return m_ElectionIndex < 0 || m_ElectionIndex >= archive.Count ? archive.Latest : archive[m_ElectionIndex];
+            }
+        }
+
+
         private void TogglePanel()
         {
-            m_PanelOpen.Update(!m_PanelOpen.value);
+            if (m_PanelOpen.value) ClosePanel();
+            else m_PanelOpen.Update(true);
             Invalidate();
         }
 
-        private void ClosePanel() => m_PanelOpen.Update(false);
+        /// <summary>Closing the panel (or the map legend) also ends the map view, so the overlay goes with it.</summary>
+        private void ClosePanel()
+        {
+            m_PanelOpen.Update(false);
+            m_MapView.Update(false);
+        }
 
         private void StepElection(int delta)
         {
@@ -125,9 +153,19 @@ namespace ElectionAtlas.Systems
             Invalidate();
         }
 
-        // ---------------------------------------------------------------- JSON
+        // ---------------------------------------------------------------- bindings (shapes in UiWriters)
 
-        private string BuildOverview()
+        /// <summary>Dev builds check every write's shapes in managed code first (see Dev/ShapeGuard); release builds write directly.</summary>
+        private static Action<IJsonWriter> Guarded(string name, Action<IJsonWriter> write)
+        {
+#if DEV_TOOLS
+            return Dev.ShapeGuard.Wrap(name, write);
+#else
+            return write;
+#endif
+        }
+
+        private void WriteOverview(IJsonWriter w)
         {
             var ledger = m_Elections.Ledger;
             int now = m_Elections.NowMonth;
@@ -135,170 +173,112 @@ namespace ElectionAtlas.Systems
             var governing = parties.FirstOrDefault(p => p.Id == ledger.GoverningPartyId);
             var poll = ledger.Polls.Latest;
 
-            var j = new Json().Begin()
-                .Prop("state", m_CityHall.State.ToString())
-                .Prop("today", now)
-                .Prop("cityHalls", m_CityHall.CityHallCount)
-                .Prop("efficiency", m_CityHall.Efficiency)
-                .Prop("shutDown", m_CityHall.IsShutDown)
-                .Prop("switchedOff", m_CityHall.SwitchedOff)
-                .Prop("shutdownMonths", ledger.ShutdownMonths)
-                .Prop("nextElection", ledger.NextElectionMonth == ElectionSchedule.NotScheduled ? -1 : ledger.NextElectionMonth)
-                .Prop("monthsUntil", ElectionSchedule.MonthsUntil(now, ledger.NextElectionMonth))
-                .Prop("elections", ledger.Archive.Count)
-                .Prop("reading", m_Elections.IsReading)
-                .Prop("devMonthOffset", m_Elections.DevMonthOffset);
+            w.TypeBegin("ElectionAtlas.Overview");
+            w.Prop("state", m_CityHall.State.ToString());
+            w.Prop("today", now);
+            w.Prop("cityHalls", m_CityHall.CityHallCount);
+            w.Prop("efficiency", m_CityHall.Efficiency);
+            w.Prop("shutDown", m_CityHall.IsShutDown);
+            w.Prop("switchedOff", m_CityHall.SwitchedOff);
+            w.Prop("shutdownMonths", ledger.ShutdownMonths);
+            w.Prop("nextElection", ledger.NextElectionMonth == ElectionSchedule.NotScheduled ? -1 : ledger.NextElectionMonth);
+            w.Prop("monthsUntil", ElectionSchedule.MonthsUntil(now, ledger.NextElectionMonth));
+            w.Prop("elections", ledger.Archive.Count);
+            w.Prop("reading", m_Elections.IsReading);
+            w.Prop("devMonthOffset", m_Elections.DevMonthOffset);
 
-            j.Key("governing");
-            if (governing != null) PartyJson(j, governing.Id, governing.Name, governing.Color);
-            else if (ledger.GoverningPartyId != null) j.Begin().Prop("id", ledger.GoverningPartyId).Prop("name", ledger.GoverningPartyId).Prop("color", "#888888").End();
-            else j.Null();
+            w.PropertyName("governing");
+            if (governing != null) w.Party(governing.Id, governing.Name, governing.Color);
+            else if (ledger.GoverningPartyId != null) w.Party(ledger.GoverningPartyId, ledger.GoverningPartyId, 0x888888);
+            else w.WriteNull();
 
-            j.Key("parties").BeginArray();
-            foreach (var p in parties)
-                PartyJson(j, p.Id, p.Name, p.Color, p.Position.Economic, p.Position.Social);
-            j.EndArray();
+            w.PropertyName("parties");
+            w.ArrayBegin((uint)parties.Length);
+            foreach (var p in parties) w.Party(p.Id, p.Name, p.Color, p.Position);
+            w.ArrayEnd();
 
-            j.Key("poll");
+            w.PropertyName("poll");
             if (poll != null)
             {
-                j.Begin().Prop("month", poll.MonthIndex).Prop("approval", poll.Approval);
-                IntentionJson(j, poll, parties);
-                j.End();
+                w.TypeBegin("ElectionAtlas.Poll");
+                w.Prop("month", poll.MonthIndex);
+                w.Prop("approval", poll.Approval);
+                w.PropertyName("intention");
+                w.Intention(poll, parties);
+                w.TypeEnd();
             }
-            else j.Null();
+            else w.WriteNull();
 
-            return j.End().ToString();
+            w.TypeEnd();
         }
 
         /// <summary>The shown election (latest by default) and every district in it.</summary>
-        private string BuildDistricts()
+        private void WriteDistricts(IJsonWriter w)
         {
             var ledger = m_Elections.Ledger;
             var archive = ledger.Archive;
-            var j = new Json().Begin().Prop("count", archive.Count);
-            if (archive.Count == 0)
-                return j.End().ToString();
+            int index = archive.Count == 0 ? -1 : m_ElectionIndex < 0 ? archive.Count - 1 : Math.Min(m_ElectionIndex, archive.Count - 1);
+            var s = index >= 0 ? archive[index] : null;
+            var districts = DistrictViews.ForElection(ledger, s, m_Elections.Profiles); // empty when there's no election
 
-            int index = m_ElectionIndex < 0 ? archive.Count - 1 : Math.Min(m_ElectionIndex, archive.Count - 1);
-            var s = archive[index];
-            j.Prop("index", index);
-            j.Prop("approvalMonth", ledger.Polls.Latest?.MonthIndex ?? -1);
-            SummaryFields(j, s);
-
-            j.Key("districts").BeginArray();
-            foreach (var d in DistrictViews.ForElection(ledger, s))
-                DistrictJson(j, d);
-            j.EndArray();
-
-            return j.End().ToString();
+            // Same properties whether or not there's an election (see the rule in UiWriters).
+            w.TypeBegin("ElectionAtlas.Districts");
+            w.Prop("count", archive.Count);
+            w.Prop("index", index);
+            w.Prop("approvalMonth", ledger.Polls.Latest?.MonthIndex ?? -1);
+            w.ElectionFields(s);
+            w.PropertyName("districts");
+            w.ArrayBegin((uint)districts.Count);
+            foreach (var d in districts) w.District(d);
+            w.ArrayEnd();
+            w.TypeEnd();
         }
 
-        private string BuildHistory()
+        private void WriteHistory(IJsonWriter w)
         {
             var archive = m_Elections.Ledger.Archive;
-            var j = new Json().Begin();
-            j.Key("elections").BeginArray();
+            w.TypeBegin("ElectionAtlas.History");
+            w.PropertyName("elections");
+            w.ArrayBegin((uint)archive.Count);
             for (int i = archive.Count - 1; i >= 0; i--)
             {
-                j.Begin().Prop("index", i);
-                SummaryFields(j, archive[i]);
-                j.End();
+                w.TypeBegin("ElectionAtlas.HistoryEntry");
+                w.Prop("index", i);
+                w.ElectionFields(archive[i]);
+                w.TypeEnd();
             }
-
-            return j.EndArray().End().ToString();
+            w.ArrayEnd();
+            w.TypeEnd();
         }
 
-        private string BuildPolls()
+        private void WritePolls(IJsonWriter w)
         {
             var ledger = m_Elections.Ledger;
             var parties = m_Elections.CurrentParties();
-            var j = new Json().Begin();
+            var records = ledger.Polls.Records;
+            int start = Math.Max(0, records.Count - kPollRows);
 
-            j.Key("parties").BeginArray();
-            foreach (var p in parties) PartyJson(j, p.Id, p.Name, p.Color);
-            j.EndArray();
+            w.TypeBegin("ElectionAtlas.Polls");
+            w.PropertyName("parties");
+            w.ArrayBegin((uint)parties.Length);
+            foreach (var p in parties) w.Party(p.Id, p.Name, p.Color);
+            w.ArrayEnd();
 
-            j.Key("records").BeginArray();
-            foreach (var r in ledger.Polls.Records.Skip(Math.Max(0, ledger.Polls.Count - kPollRows)))
+            w.PropertyName("records");
+            w.ArrayBegin((uint)(records.Count - start));
+            for (int i = start; i < records.Count; i++)
             {
-                j.Begin().Prop("month", r.MonthIndex).Prop("approval", r.Approval).Prop("governing", r.GoverningPartyId);
-                IntentionJson(j, r, parties);
-                j.End();
+                var r = records[i];
+                w.TypeBegin("ElectionAtlas.PollRecord");
+                w.Prop("month", r.MonthIndex);
+                w.Prop("approval", r.Approval);
+                w.Prop("governing", r.GoverningPartyId);
+                w.PropertyName("intention");
+                w.Intention(r, parties);
+                w.TypeEnd();
             }
-
-            return j.EndArray().End().ToString();
-        }
-
-        internal static void DistrictJson(Json j, DistrictView d)
-        {
-            j.Begin()
-                .Prop("id", d.Id)
-                .Prop("index", d.EntityIndex)
-                .Prop("version", d.EntityVersion)
-                .Prop("selectable", d.CanSelect)
-                .Prop("name", d.Name)
-                .Prop("eligible", d.Eligible)
-                .Prop("votes", d.Votes)
-                .Prop("turnout", d.Turnout)
-                .Prop("winner", d.Winner)
-                .Prop("winnerShare", d.WinnerShare)
-                .Prop("margin", d.Margin)
-                .Color("color", d.Color);
-
-            j.Key("approval");
-            if (d.HasApproval) j.Value(d.Approval); else j.Null();
-
-            j.Key("partyVotes").BeginArray();
-            if (d.PartyVotes != null) foreach (long v in d.PartyVotes) j.Value(v);
-            j.EndArray();
-
-            j.Key("trend").BeginArray();
-            if (d.Trend != null) foreach (float f in d.Trend) j.Value(f);
-            j.EndArray();
-
-            j.End();
-        }
-
-        private static void PartyJson(Json j, string id, string name, uint color, float? economic = null, float? social = null)
-        {
-            j.Begin().Prop("id", id).Prop("name", name).Color("color", color);
-            if (economic.HasValue) j.Prop("economic", economic.Value);
-            if (social.HasValue) j.Prop("social", social.Value);
-            j.End();
-        }
-
-        /// <summary>Intention mapped onto the current lineup (0 for parties the poll didn't include).</summary>
-        private static void IntentionJson(Json j, PollRecord r, Party[] parties)
-        {
-            j.Key("intention").BeginArray();
-            foreach (var p in parties)
-            {
-                int i = Array.IndexOf(r.PartyIds, p.Id);
-                j.Value(i >= 0 ? r.Intention[i] : 0f);
-            }
-            j.EndArray();
-        }
-
-        private static void SummaryFields(Json j, ElectionSnapshot s)
-        {
-            j.Prop("number", s.Number)
-                .Prop("month", ElectionSchedule.MonthIndex(s.Year, s.Month))
-                .Prop("rule", s.Rule.ToString())
-                .Prop("turnout", s.Turnout)
-                .Prop("target", s.TargetTurnout)
-                .Prop("eligible", s.Eligible)
-                .Prop("votes", s.Votes)
-                .Prop("governing", s.GoverningPartyIndex);
-
-            j.Key("parties").BeginArray();
-            for (int i = 0; i < s.Parties.Length; i++)
-            {
-                var p = s.Parties[i];
-                j.Begin().Prop("id", p.Id).Prop("name", p.Name).Color("color", p.Color)
-                    .Prop("share", s.Share(i)).Prop("votes", s.PartyVotes[i]).Prop("won", s.DistrictsWon[i]).End();
-            }
-            j.EndArray();
+            w.ArrayEnd();
+            w.TypeEnd();
         }
     }
 }

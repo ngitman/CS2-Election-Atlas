@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using ElectionAtlas.Model;
@@ -10,21 +11,29 @@ namespace ElectionAtlas.Systems
 {
     /// <summary>
     /// Phases 4-5: the calendar. On each new in-game month it runs a poll (while a City Hall stands) and, when
-    /// due, an election; the work is spread over 16 updates by <see cref="SlicedVoterReader"/>. Elections and
-    /// polls are frozen into the <see cref="ElectionLedger"/>, which ElectionStoreSystem saves when enabled.
-    /// A City Hall shutdown doesn't stop anything; it becomes a penalty for the governing party.
-    /// Cost: idle updates every 512 frames only compare the month; a read runs one slice every 16 frames.
+    /// due, an election. Elections and polls are frozen into the <see cref="ElectionLedger"/>, which
+    /// ElectionStoreSystem saves when enabled. A City Hall shutdown doesn't stop anything; it becomes a penalty
+    /// for the governing party.
+    ///
+    /// Cost: the voters are counted by a census taken in the last quarter of each month, in Burst slices of
+    /// <see cref="kSliceHouseholds"/> households scheduled on worker threads behind the game's own jobs (the main
+    /// thread never waits). When the month turns, the poll and election run on that census straight away (the
+    /// model takes well under a millisecond). Without a fresh census (just loaded, months skipped) the same read
+    /// runs on the spot. Idle updates every 512 frames only compare the month.
     /// </summary>
     public partial class ElectionSystem : GameSystemBase
     {
         private const int kIdleInterval = 512;
         private const int kReadInterval = 16;
-        private const int kSlices = 16;
+        private const int kSliceHouseholds = 1024;  // about 0.2 ms of worker time per slice
+        private const float kCensusStart = 0.75f;  // census starts once the month is this far along
 
         private CityHallSystem m_CityHall;
         private TimeSystem m_Time;
-        private SlicedVoterReader m_Reader;
+        private VoterReader m_Reader;
         private readonly ModelConfig m_Config = new ModelConfig();
+        private readonly ProfileConfig m_ProfileConfig = new ProfileConfig();
+        private readonly Dictionary<long, DistrictProfile> m_Profiles = new Dictionary<long, DistrictProfile>();
 
         private ElectionLedger m_Restored;
         private bool m_InGame;
@@ -32,8 +41,15 @@ namespace ElectionAtlas.Systems
         private bool m_PendingPoll;
         private bool m_PendingElection;
         private int m_PendingMonth;
-        private int m_StepSize;
-        private Stopwatch m_ReadTimer;
+        private int m_ReadMonth;
+        private int m_ReadSlices;
+        private int m_ReadHouseholds;
+
+        // The latest census, waiting for next month's poll/election.
+        private GroupTable m_Census;
+        private DistrictInfo[] m_CensusDistricts;
+        private string[] m_CensusNames;
+        private int m_CensusMonth = int.MinValue;
 
         public ElectionLedger Ledger { get; private set; } = new ElectionLedger();
 
@@ -53,6 +69,9 @@ namespace ElectionAtlas.Systems
 
         public ModelConfig Config => m_Config;
 
+        /// <summary>Each district's current profile (by district id), from the latest read.</summary>
+        public IReadOnlyDictionary<long, DistrictProfile> Profiles => m_Profiles;
+
         public int NowMonth
         {
             get
@@ -71,7 +90,7 @@ namespace ElectionAtlas.Systems
             base.OnCreate();
             m_CityHall = World.GetOrCreateSystemManaged<CityHallSystem>();
             m_Time = World.GetOrCreateSystemManaged<TimeSystem>();
-            m_Reader = new SlicedVoterReader(World);
+            m_Reader = new VoterReader(this);
         }
 
         protected override void OnDestroy()
@@ -95,6 +114,8 @@ namespace ElectionAtlas.Systems
             base.OnGameLoadingComplete(purpose, mode);
             m_InGame = mode == GameMode.Game;
             m_Reader.Cancel();
+            ClearCensus();
+            m_Profiles.Clear();
             m_PendingPoll = m_PendingElection = false;
             DevMonthOffset = 0;
             LatestPoll = null;
@@ -109,6 +130,22 @@ namespace ElectionAtlas.Systems
             m_CityHall.ResetForLoad(Ledger.State);
             m_LastGateState = Ledger.State;
             DataVersion++;
+
+            if (m_InGame) WarmUpModel();
+        }
+
+        /// <summary>
+        /// Runs the model once on a tiny table while the loading screen is still up, so the first real election
+        /// doesn't pay for compiling it (about 40 ms the first time, under 1 ms after).
+        /// </summary>
+        private void WarmUpModel()
+        {
+            var sw = Stopwatch.StartNew();
+            var table = new GroupTable(1, new[] { new VoterGroup(0, AgeBand.Adult, 2, 1, JobSector.Office, 10, 50f) });
+            var parties = CurrentParties();
+            ElectionModel.RunElection(table, parties, null, GoverningRule.PopularVote, TurnoutPreset.UsGeneral, m_Config, 1);
+            ElectionModel.RunPoll(table, parties, null, m_Config);
+            Mod.Log.Info($"Model warmed up in {sw.ElapsedMilliseconds} ms");
         }
 
         protected override void OnUpdate()
@@ -121,29 +158,94 @@ namespace ElectionAtlas.Systems
 
             if (m_Reader.InProgress)
             {
-                if (m_Reader.Step(m_StepSize))
+                if (!m_Reader.AllScheduled)
                 {
-                    var table = m_Reader.Finish(out var districts, out var names);
-                    Process(table, districts, names, m_PendingMonth, m_PendingPoll, m_PendingElection, m_ReadTimer?.ElapsedMilliseconds ?? 0);
-                    m_PendingPoll = m_PendingElection = false;
+                    Dependency = m_Reader.ScheduleStep(kSliceHouseholds, Dependency);
+                    m_ReadSlices++;
+                    return;
                 }
 
+                // Every slice was scheduled at least one update ago, so this doesn't wait.
+                var table = m_Reader.Finish(out var districts, out var names);
+                UpdateProfiles(districts);
+                if (m_PendingPoll || m_PendingElection)
+                {
+                    Process(table, districts, names, m_PendingMonth, m_PendingPoll, m_PendingElection, ReadNote("on the spot"));
+                    m_PendingPoll = m_PendingElection = false;
+                }
+                else
+                {
+                    m_Census = table;
+                    m_CensusDistricts = districts;
+                    m_CensusNames = names;
+                    m_CensusMonth = m_ReadMonth;
+                }
                 return;
             }
 
             var tick = Ledger.OnMonth(now, m_CityHall.IsShutDown);
-            if (!tick.IsNewMonth)
-                return;
-
-            DataVersion++;
-            if (tick.RunPoll || tick.RunElection)
+            if (tick.IsNewMonth)
             {
-                m_PendingPoll = tick.RunPoll;
-                m_PendingElection = tick.RunElection;
-                m_PendingMonth = now;
-                m_ReadTimer = Stopwatch.StartNew();
-                m_Reader.Begin();
-                m_StepSize = Math.Max(64, m_Reader.HouseholdCount / kSlices + 1);
+                DataVersion++;
+                if (tick.RunPoll || tick.RunElection)
+                {
+                    if (m_Census != null && m_CensusMonth == now - 1)
+                    {
+                        Process(m_Census, m_CensusDistricts, m_CensusNames, now, tick.RunPoll, tick.RunElection, ReadNote("census from last month"));
+                        ClearCensus();
+                    }
+                    else
+                    {
+                        m_PendingPoll = tick.RunPoll;
+                        m_PendingElection = tick.RunElection;
+                        m_PendingMonth = now;
+                        BeginRead(now);
+                    }
+                }
+                return;
+            }
+
+            // Late in the month: take the census next month's poll will use, in the background.
+            if (m_CensusMonth != now && m_CityHall.State != GovernmentState.NoCityHall && MonthProgress >= kCensusStart)
+                BeginRead(now);
+        }
+
+        private void BeginRead(int month)
+        {
+            m_Reader.Begin();
+            m_ReadMonth = month;
+            m_ReadSlices = 0;
+            m_ReadHouseholds = m_Reader.HouseholdCount;
+        }
+
+        private string ReadNote(string how) =>
+            $"{m_ReadHouseholds:N0} households read in {m_ReadSlices} worker slices ({how})";
+
+        /// <summary>Refreshes district profiles from the reader's last land-use pass.</summary>
+        private void UpdateProfiles(DistrictInfo[] districts)
+        {
+            var land = m_Reader.LandUse;
+            m_Profiles.Clear();
+            for (int i = 0; i < districts.Length && i < land.Length; i++)
+                if (districts[i].IsSeat) m_Profiles[districts[i].Id] = DistrictProfiles.Classify(land[i], m_ProfileConfig);
+            DataVersion++;
+        }
+
+        private void ClearCensus()
+        {
+            m_Census = null;
+            m_CensusDistricts = null;
+            m_CensusNames = null;
+            m_CensusMonth = int.MinValue;
+        }
+
+        /// <summary>How far through the current in-game month we are, 0 to 1.</summary>
+        private float MonthProgress
+        {
+            get
+            {
+                float months = m_Time.normalizedDate * 12f;
+                return months - (float)Math.Floor(months);
             }
         }
 
@@ -162,7 +264,7 @@ namespace ElectionAtlas.Systems
         }
 
         /// <summary>Runs the poll and/or election on a finished read and records them.</summary>
-        private void Process(GroupTable table, DistrictInfo[] districts, string[] names, int month, bool poll, bool election, long readMs)
+        private void Process(GroupTable table, DistrictInfo[] districts, string[] names, int month, bool poll, bool election, string readNote)
         {
             if (table.TotalVoters == 0)
             {
@@ -207,7 +309,7 @@ namespace ElectionAtlas.Systems
                     Ledger.Polls.Add(PollRecord.From(result, month, Ledger.GoverningPartyId, districts));
             }
 
-            Mod.Log.Info($"{ElectionSchedule.Format(month)}: {(election ? "election + " : "")}{(poll ? "poll" : "")} on {table.TotalVoters:N0} voters ({table.Groups.Count} groups); read {readMs} ms over {kSlices} slices, model {sw.ElapsedMilliseconds} ms");
+            Mod.Log.Info($"{ElectionSchedule.Format(month)}: {(election ? "election + " : "")}{(poll ? "poll" : "")} on {table.TotalVoters:N0} voters ({table.Groups.Count} groups); {readNote}; model {sw.Elapsed.TotalMilliseconds:0.00} ms");
             DataVersion++;
         }
 
@@ -224,9 +326,10 @@ namespace ElectionAtlas.Systems
             m_Reader.Cancel();
             var sw = Stopwatch.StartNew();
             var table = m_Reader.ReadAll(out var districts, out var names);
+            UpdateProfiles(districts);
             int before = Ledger.Archive.Count;
             int now = NowMonth;
-            Process(table, districts, names, now, poll: true, election: true, readMs: sw.ElapsedMilliseconds);
+            Process(table, districts, names, now, poll: true, election: true, readNote: $"full read {sw.Elapsed.TotalMilliseconds:0.0} ms");
             var s = Ledger.Archive.Latest;
             if (Ledger.Archive.Count == before || s == null)
                 return "No election: there are no voting-age residents yet.";
@@ -241,7 +344,8 @@ namespace ElectionAtlas.Systems
             m_Reader.Cancel();
             var sw = Stopwatch.StartNew();
             var table = m_Reader.ReadAll(out var districts, out var names);
-            Process(table, districts, names, NowMonth, poll: true, election: false, readMs: sw.ElapsedMilliseconds);
+            UpdateProfiles(districts);
+            Process(table, districts, names, NowMonth, poll: true, election: false, readNote: $"full read {sw.Elapsed.TotalMilliseconds:0.0} ms");
             if (LatestPoll == null)
                 return "No poll: there are no voting-age residents yet.";
             var parties = CurrentParties();
@@ -268,6 +372,7 @@ namespace ElectionAtlas.Systems
         public string DevReset()
         {
             m_Reader.Cancel();
+            ClearCensus();
             var state = m_CityHall.State;
             Ledger = new ElectionLedger();
             Ledger.OnGovernmentChanged(GovernmentState.NoCityHall, state == GovernmentState.Active || state == GovernmentState.Suspended ? GovernmentState.AwaitingFounding : state, NowMonth, Cadence);

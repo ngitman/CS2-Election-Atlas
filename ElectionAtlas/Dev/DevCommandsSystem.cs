@@ -26,7 +26,7 @@ namespace ElectionAtlas.Dev
         private CityHallSystem m_CityHall;
         private ElectionSystem m_Elections;
         private TimeSystem m_TimeSystem;
-        private MainThreadVoterReader m_Reader;
+        private VoterReader m_Reader; // its own instance: never the one the census is using
 
         private ValueBinding<string> m_Status;
 
@@ -36,7 +36,7 @@ namespace ElectionAtlas.Dev
             m_CityHall = World.GetOrCreateSystemManaged<CityHallSystem>();
             m_Elections = World.GetOrCreateSystemManaged<ElectionSystem>();
             m_TimeSystem = World.GetOrCreateSystemManaged<TimeSystem>();
-            m_Reader = new MainThreadVoterReader(World);
+            m_Reader = new VoterReader(this);
 
             AddBinding(new ValueBinding<bool>(kGroup, "devTools", true));
             AddBinding(m_Status = new ValueBinding<string>(kGroup, "devStatus", "Developer tools ready."));
@@ -49,6 +49,7 @@ namespace ElectionAtlas.Dev
             AddBinding(new TriggerBinding(kGroup, "devSwitchParties", () => Run("switch parties", SwitchParties)));
             AddBinding(new TriggerBinding(kGroup, "devSpikeReport", () => Run("spike report", SpikeReport)));
             AddBinding(new TriggerBinding(kGroup, "devExportCity", () => Run("export city", ExportCity)));
+            AddBinding(new TriggerBinding(kGroup, "devBenchmark", () => Run("benchmark readers", BenchmarkReaders)));
             AddBinding(new TriggerBinding<string>(kGroup, "devSetGovernment", s => Run("set government", () => SetGovernment(s))));
 
             Mod.Log.Info("[dev] developer commands registered");
@@ -75,7 +76,7 @@ namespace ElectionAtlas.Dev
 
         private string ExportCity()
         {
-            var reading = m_Reader.Read(collectAges: false);
+            var table = m_Reader.ReadAll(out _, out string[] names);
             string dir = Path.Combine(Application.persistentDataPath, "ModsData", Mod.Id, "dev");
             Directory.CreateDirectory(dir);
             string path = Path.Combine(dir, $"city-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
@@ -83,12 +84,56 @@ namespace ElectionAtlas.Dev
             int month = Math.Min(11, Math.Max(0, (int)Math.Floor(m_TimeSystem.normalizedDate * 12f)));
             using (var writer = new StreamWriter(path, false, new UTF8Encoding(false)))
             {
-                GroupTableCsv.Write(writer, reading.Table, reading.DistrictNames,
+                GroupTableCsv.Write(writer, table, names,
                     $"game date {m_TimeSystem.year}-{month + 1:00}, exported {DateTime.Now:yyyy-MM-dd HH:mm}");
             }
 
-            Mod.Log.Info($"[dev] exported {reading.Table.Groups.Count} voter groups to {path}");
-            return $"Exported {reading.Table.TotalVoters:N0} voters in {reading.Table.Groups.Count:N0} groups to\n{path}";
+            Mod.Log.Info($"[dev] exported {table.Groups.Count} voter groups to {path}");
+            return $"Exported {table.TotalVoters:N0} voters in {table.Groups.Count:N0} groups to\n{path}";
+        }
+
+        /// <summary>
+        /// Times the voter reader and the model on this city: a full read on the calling thread (what dev commands
+        /// and fallbacks pay), the worker time of one census slice, and the model warm.
+        /// </summary>
+        private string BenchmarkReaders()
+        {
+            const int runs = 7;
+            const int slice = 1024; // ElectionSystem.kSliceHouseholds
+            var table = m_Reader.ReadAll(out _, out _); // warm-up
+            var full = new double[runs];
+            var sw = new System.Diagnostics.Stopwatch();
+            for (int i = 0; i < runs; i++)
+            {
+                sw.Restart(); m_Reader.ReadAll(out _, out _); full[i] = sw.Elapsed.TotalMilliseconds;
+            }
+            Array.Sort(full);
+            double fullMs = full[runs / 2];
+            int households = m_Reader.Stats.Households;
+            int slices = Math.Max(1, (households + slice - 1) / slice);
+            double sliceMs = fullMs / slices;
+
+            var parties = m_Elections.CurrentParties();
+            var cfg = new ModelConfig();
+            var election = new double[runs];
+            var poll = new double[runs];
+            for (int i = 0; i < runs; i++)
+            {
+                sw.Restart(); ElectionModel.RunElection(table, parties, null, GoverningRule.PopularVote, TurnoutPreset.UsGeneral, cfg, (ulong)(i + 1)); election[i] = sw.Elapsed.TotalMilliseconds;
+                sw.Restart(); ElectionModel.RunPoll(table, parties, null, cfg); poll[i] = sw.Elapsed.TotalMilliseconds;
+            }
+            Array.Sort(election);
+            Array.Sort(poll);
+
+            var lines = new[]
+            {
+                $"Benchmark on {households:N0} households / {table.TotalVoters:N0} voters (Burst code: {(m_Reader.LastReadUsedBurst ? "yes" : "NO, managed fallback")}).",
+                $"Full read on the calling thread, median of {runs}: {fullMs:0.00} ms ({fullMs * 1000.0 / Math.Max(1, households):0.00} µs/household; min {full[0]:0.00} ms).",
+                $"Monthly census: {slices} slices of {slice} households, ~{sliceMs:0.000} ms each on a worker thread; main thread only schedules them.",
+                $"Model on {table.Groups.Count:N0} groups, median: election {election[runs / 2]:0.00} ms, poll {poll[runs / 2]:0.00} ms.",
+            };
+            Mod.Log.Info("[benchmark] " + string.Join(" | ", lines));
+            return string.Join(Environment.NewLine, lines);
         }
 
         private string SetGovernment(string state)

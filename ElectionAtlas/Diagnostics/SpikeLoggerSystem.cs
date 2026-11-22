@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using Colossal.Logging;
 using ElectionAtlas.Dev;
+using ElectionAtlas.Systems;
 using ElectionAtlas.Model;
 using Game;
 using Game.Buildings;
@@ -35,11 +36,13 @@ namespace ElectionAtlas.Diagnostics
         private PrefabSystem m_PrefabSystem;
         private TimeSystem m_TimeSystem;
         private SimulationSystem m_SimulationSystem;
-        private MainThreadVoterReader m_Reader;
+        private VoterReader m_Reader; // its own instance: never the one the census is using
 
         private EntityQuery m_AdminQuery;
         private EntityQuery m_AdminPrefabQuery;
         private EntityQuery m_WorkerQuery;
+        private EntityQuery m_CitizenQuery;
+        private EntityQuery m_TimeDataQuery;
 
         private bool m_InGame;
         private bool m_PendingFullReport;
@@ -58,7 +61,7 @@ namespace ElectionAtlas.Diagnostics
             m_PrefabSystem = World.GetOrCreateSystemManaged<PrefabSystem>();
             m_TimeSystem = World.GetOrCreateSystemManaged<TimeSystem>();
             m_SimulationSystem = World.GetOrCreateSystemManaged<SimulationSystem>();
-            m_Reader = new MainThreadVoterReader(World);
+            m_Reader = new VoterReader(this);
 
             var notTempOrDeleted = new[] { ComponentType.ReadOnly<Temp>(), ComponentType.ReadOnly<Deleted>() };
             m_AdminQuery = GetEntityQuery(new EntityQueryDesc
@@ -72,6 +75,13 @@ namespace ElectionAtlas.Diagnostics
                 All = new[] { ComponentType.ReadOnly<Worker>(), ComponentType.ReadOnly<Citizen>() },
                 None = notTempOrDeleted,
             });
+
+            m_CitizenQuery = GetEntityQuery(new EntityQueryDesc
+            {
+                All = new[] { ComponentType.ReadOnly<Citizen>(), ComponentType.ReadOnly<HouseholdMember>() },
+                None = notTempOrDeleted,
+            });
+            m_TimeDataQuery = GetEntityQuery(ComponentType.ReadOnly<TimeData>());
 
             Log.Info("Spike logger created (dev build). Load a city and let it run for an in-game year.");
             try { LogModelAssembly(); }
@@ -252,50 +262,100 @@ namespace ElectionAtlas.Diagnostics
         }
 
         // Spikes 6 and 7, district sanity checks for phase 3, and a preview election on the real city.
+        // Uses the same reader as real elections, so what it reports is what elections see.
         private void ReportCitizensAndPreviewElection()
         {
-            var r = m_Reader.Read(collectAges: true);
-            var w = r.WealthSorted;
+            var sw = Stopwatch.StartNew();
+            var table = m_Reader.ReadAll(out _, out string[] names);
+            long readMs = sw.ElapsedMilliseconds;
+            var st = m_Reader.Stats;
+            var w = st.WealthSorted;
 
-            Log.Info($"[spike 6] households={r.Households} wealth min={P(w, 0)} p10={P(w, 0.10)} p25={r.WealthCuts[0]} p50={r.WealthCuts[1]} p75={r.WealthCuts[2]} p90={P(w, 0.90)} max={P(w, 1)}");
-            Log.Info($"[spike 6] suggested wealth band cut points (quartiles): {r.WealthCuts[0]}, {r.WealthCuts[1]}, {r.WealthCuts[2]}");
+            Log.Info($"[spike 6] households={st.Households} wealth min={P(w, 0)} p10={P(w, 0.10)} p25={P(w, 0.25)} p50={P(w, 0.5)} p75={P(w, 0.75)} p90={P(w, 0.90)} max={P(w, 1)}");
+            Log.Info($"[spike 7] residents by age: Child={st.Children}, Teen={st.Teens}, Adult={st.Adults}, Elderly={st.Elderly}; skipped tourists={st.Tourists} commuters={st.Commuters}");
+            ReportAgeSample();
 
-            Log.Info($"[spike 7] residents by age: {string.Join(", ", r.ByAge.Select(kv => $"{kv.Key}={kv.Value}"))}; skipped tourists={r.Tourists} commuters={r.Commuters}; adult students without a job={r.AdultStudents}");
-            foreach (var kv in r.AgeDays.OrderBy(k => k.Key))
+            var voters = new long[table.DistrictCount];
+            var happiness = new double[table.DistrictCount];
+            foreach (var g in table.Groups)
             {
-                var days = kv.Value;
-                days.Sort();
-                Log.Info($"[spike 7]   {kv.Key} age in days: min={P(days, 0):0.0} p5={P(days, 0.05):0.0} p50={P(days, 0.5):0.0} p95={P(days, 0.95):0.0} max={P(days, 1):0.0}");
+                voters[g.District] += g.Count;
+                happiness[g.District] += (double)g.AvgHappiness * g.Count;
+            }
+            Log.Info($"[phase 3] voting-age residents={table.TotalVoters} in {names.Length - 1} district(s) + {DistrictInfo.OutsideName}");
+            for (int d = 0; d < names.Length; d++)
+            {
+                if (voters[d] == 0) continue;
+                Log.Info($"[phase 3]   {names[d]}: voters={voters[d]} avgHappiness={happiness[d] / voters[d]:0.0}");
             }
 
-            Log.Info($"[phase 3] voting-age residents={r.Voters} in {r.DistrictNames.Length - 1} district(s) + Unassigned");
-            for (int d = 0; d < r.DistrictNames.Length; d++)
+            var land = m_Reader.LandUse;
+            var cfg = new ProfileConfig();
+            for (int d = 0; d < names.Length - 1 && d < land.Length; d++)
             {
-                if (r.VotersByDistrict[d] == 0) continue;
-                Log.Info($"[phase 3]   {r.DistrictNames[d]}: voters={r.VotersByDistrict[d]} avgHappiness={(double)r.HappinessByDistrict[d] / r.VotersByDistrict[d]:0.0}");
+                var l = land[d];
+                Log.Info($"[profiles] {names[d]}: {DistrictProfiles.Classify(l, cfg)} | households={l.Households} area={l.AreaM2 / 10000f:0.0} ha " +
+                    $"({l.HouseholdsPerHectare:0.0}/ha) homes/cell={l.HomeDensity:0.00} jobs={l.Jobs} (industrial {l.IndustrialJobs}, office {l.OfficeJobs}, commercial {l.CommercialJobs})");
             }
 
-            PreviewElection(r);
-            Log.Info($"[timing] citizen pass took {r.ElapsedMs} ms (main thread, unoptimized; the real reader is a Burst job)");
+            PreviewElection(table, names);
+            Log.Info($"[timing] full read took {readMs} ms in one go (scheduled reads are spread over time)");
         }
 
-        private static void PreviewElection(VoterReading r)
+        /// <summary>
+        /// Spike 7's age-threshold question (where the game's Teen/Adult/Elderly bands start, in days) and how many
+        /// adults are students without a job. A sample, not a census: this is calibration, not voting.
+        /// </summary>
+        private void ReportAgeSample()
+        {
+            if (m_TimeDataQuery.IsEmptyIgnoreFilter) return;
+            var timeData = m_TimeDataQuery.GetSingleton<TimeData>();
+            uint frame = m_SimulationSystem.frameIndex;
+            var days = new Dictionary<CitizenAge, List<float>>();
+            int adultStudents = 0;
+
+            using (var citizens = m_CitizenQuery.ToEntityArray(Allocator.Temp))
+            {
+                int step = Math.Max(1, citizens.Length / kWorkerSample);
+                for (int i = 0; i < citizens.Length; i += step)
+                {
+                    var c = EntityManager.GetComponentData<Citizen>(citizens[i]);
+                    if ((c.m_State & (CitizenFlags.Tourist | CitizenFlags.Commuter)) != 0) continue;
+                    var age = c.GetAge();
+                    if (!days.TryGetValue(age, out var list)) days[age] = list = new List<float>();
+                    list.Add(c.GetAgeInDays(frame, timeData));
+                    if (age == CitizenAge.Adult && !EntityManager.HasComponent<Worker>(citizens[i])
+                        && EntityManager.HasComponent<Game.Citizens.Student>(citizens[i]))
+                        adultStudents++;
+                }
+            }
+
+            foreach (var kv in days.OrderBy(k => k.Key))
+            {
+                var list = kv.Value;
+                list.Sort();
+                Log.Info($"[spike 7]   {kv.Key} age in days (sample): min={P(list, 0):0.0} p5={P(list, 0.05):0.0} p50={P(list, 0.5):0.0} p95={P(list, 0.95):0.0} max={P(list, 1):0.0}");
+            }
+            Log.Info($"[spike 7] adult students without a job in the sample: {adultStudents}");
+        }
+
+        private static void PreviewElection(GroupTable table, string[] names)
         {
             var parties = DevParties.Default;
             var cfg = new ModelConfig();
 
             var sw = Stopwatch.StartNew();
-            var result = ElectionModel.RunElection(r.Table, parties, null, GoverningRule.PopularVote, TurnoutPreset.UsGeneral, cfg, 1);
-            var poll = ElectionModel.RunPoll(r.Table, parties, null, cfg);
+            var result = ElectionModel.RunElection(table, parties, null, GoverningRule.PopularVote, TurnoutPreset.UsGeneral, cfg, 1);
+            var poll = ElectionModel.RunPoll(table, parties, null, cfg);
             long ms = sw.ElapsedMilliseconds;
 
-            Log.Info($"[preview] {r.Table.Groups.Count} voter groups, {r.Table.TotalVoters} voters; model ran in {ms} ms");
+            Log.Info($"[preview] {table.Groups.Count} voter groups, {table.TotalVoters} voters; model ran in {ms} ms");
             Log.Info($"[preview] citywide turnout={result.Turnout:P1} {parties[0].Name}={result.Shares[0]:P1} {parties[1].Name}={result.Shares[1]:P1} governing={result.GoverningPartyId} approval(happiness)={poll.Approval:0.0}");
             foreach (var d in result.Districts)
             {
                 if (d.Eligible == 0) continue;
                 string winner = d.WinnerIndex >= 0 ? parties[d.WinnerIndex].Name : "-";
-                Log.Info($"[preview]   {r.DistrictNames[d.District]}: winner={winner} margin={d.Margin * 100f:0.0} pts turnout={d.Turnout:P1} votes {parties[0].Name}={d.PartyVotes[0]} {parties[1].Name}={d.PartyVotes[1]}");
+                Log.Info($"[preview]   {names[d.District]}: winner={winner} margin={d.Margin * 100f:0.0} pts turnout={d.Turnout:P1} votes {parties[0].Name}={d.PartyVotes[0]} {parties[1].Name}={d.PartyVotes[1]}");
             }
         }
 

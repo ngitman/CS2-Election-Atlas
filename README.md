@@ -7,7 +7,7 @@ Election results for every district of your city, as exact numbers and as maps. 
 ## Status
 
 - **Phase 1 (scaffold):** done and tested in game (1.6.4): the mod and model load, Burst code loads, the settings show in Options, and the top-left button opens the Elections panel.
-- **Phases 3–5 (reader, elections, polls, saving) and most of phase 6 (panel tabs):** built, not yet tested in game; see [TESTING.md](TESTING.md). The reader runs on the main thread in 16 slices (a Burst job can replace it later). A City Hall shutdown doesn't stop elections; it costs the governing party approval and votes. Saving election data is an experimental, off-by-default option. Not built yet: the map overlay, district cards on click, the party editor.
+- **Phases 3–6 (reader, elections, polls, saving, the panel, district popups and the map view):** built and partly tested in game; see [TESTING.md](TESTING.md). Voters are counted by a monthly census: a Burst job reads households in slices of 1,024 on worker threads during the last quarter of each month, so the main thread never waits, and the poll or election at the month change runs on it straight away. A City Hall shutdown doesn't stop elections; it costs the governing party approval and votes. Saving election data is an experimental, off-by-default option. Not built yet: the party editor.
 - **Phase 2 (City Hall gate):** built, not yet tested in game. Detects a placed City Hall (by `AdminBuilding` plus a "cityhall" prefab name, since the Central Bank carries `AdminBuilding` too), moves through No City Hall → Awaiting founding → Active ⇄ Suspended, and shows the state in the panel. Not saved yet; recomputed on load.
 - **Phase 4a (model library):** done. `ElectionAtlas.Model` runs elections and polls over voter groups, with no game references: lean, turnout calibrated to real-world presets, vote shares, governing rules, approval from the game's happiness, and frozen election snapshots with tinted map colors. 44 xUnit tests.
 - Next: phase 3 (voter-group reader), after spikes 4, 6 and 7 run on a populated city.
@@ -16,7 +16,7 @@ Election results for every district of your city, as exact numbers and as maps. 
 
 1. Scaffold: mod loads, settings, empty panel
 2. City Hall gate: elections unlock with a City Hall and pause without one
-3. Voter-group reader: every adult resident grouped by district, age, education, wealth and job (Burst job, spread over 16 updates)
+3. Voter-group reader: every adult resident grouped by district, age, education, wealth and job (Burst job in worker-thread slices, as a census late each month)
 4. Vote model (done) and a debug button that runs one real election
 5. Scheduler and save data: elections on a cadence, monthly polls, archive in the save file
 6. Full UI: district cards, results table, and map modes for winner (tinted by margin), turnout, swing, party strength and approval

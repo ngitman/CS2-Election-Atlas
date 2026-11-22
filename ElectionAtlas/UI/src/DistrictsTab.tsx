@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { trigger, useValue } from "cs2/api";
 import { selectedInfo } from "cs2/bindings";
-import { Districts, DistrictView, GROUP } from "./bindings";
-import { approvalPct, monthLabel, pct, withAlpha } from "./format";
-import { StackBar } from "./parts";
+import { Districts, DistrictView, GROUP, partyShare } from "./bindings";
+import { approvalPct, count, pct, withAlpha } from "./format";
+import { ElectionPicker, StackBar } from "./parts";
 
 /** The atlas: the shown election's citywide result, then every district's result as a table. */
 export const DistrictsTab = ({ d, onOpen, openId }: { d: Districts | null; onOpen: (id: number) => void; openId: number | null }) => {
@@ -14,30 +14,21 @@ export const DistrictsTab = ({ d, onOpen, openId }: { d: Districts | null; onOpe
   }
 
   const parties = d.parties ?? [];
-  const index = d.index ?? 0;
-  const older = index > 0;
-  const newer = index < d.count - 1;
 
   return (
     <div>
-      <div className="ea-picker">
-        <div className={older ? "ea-iconbtn" : "ea-iconbtn ea-iconbtn--off"} onClick={() => older && trigger(GROUP, "stepElection", -1)}>
-          ‹
-        </div>
-        <div className="ea-picker__title">
-          <div className="ea-bold">{`Election ${d.number} · ${monthLabel(d.month)}`}</div>
-          {d.count > 1 ? <div className="ea-muted ea-small">{`${index + 1} of ${d.count}`}</div> : null}
-        </div>
-        <div className={newer ? "ea-iconbtn" : "ea-iconbtn ea-iconbtn--off"} onClick={() => newer && trigger(GROUP, "stepElection", 1)}>
-          ›
-        </div>
-      </div>
+      <ElectionPicker d={d} />
 
       <StackBar parties={parties} shares={parties.map((p) => p.share ?? 0)} />
-      <div className="ea-muted ea-small">
-        {`Turnout ${pct(d.turnout)} of ${(d.eligible ?? 0).toLocaleString()} voters. ` +
-          (d.governing !== undefined && d.governing >= 0 ? `${parties[d.governing]?.name} formed the government` : "No government formed") +
-          (d.rule === "MostDistricts" ? " by winning the most districts." : " on the popular vote.")}
+      <div className="ea-maprow">
+        <div className="ea-muted ea-small">
+          {`Turnout ${pct(d.turnout)} of ${count(d.eligible)} voters. ` +
+            (d.governing !== undefined && d.governing >= 0 ? `${parties[d.governing]?.name} formed the government` : "No government formed") +
+            (d.rule === "MostDistricts" ? " by winning the most districts." : " on the popular vote.")}
+        </div>
+        <div className="ea-btn ea-btn--primary ea-btn--slim" onClick={() => trigger(GROUP, "showMap")}>
+          View on map
+        </div>
       </div>
 
       <DistrictTable
@@ -52,8 +43,6 @@ export const DistrictsTab = ({ d, onOpen, openId }: { d: Districts | null; onOpe
 
 type SortKey = "name" | "margin" | "turnout" | "approval" | number;
 const PAGE_SIZE = 8;
-/** Must match DistrictInfo.OutsideId in C#. */
-const OUTSIDE_ID = -1;
 
 /** Every district as a row: each party's share as a column, then margin, turnout and approval.
  *  Rows are tinted with the district's map color (the winner's color, stronger for safer seats). */
@@ -73,16 +62,15 @@ const DistrictTable = ({
   const parties = d.parties ?? [];
   // Residents outside every drawn district: counted citywide, never a seat, so pinned below the districts.
   const all = d.districts ?? [];
-  const rows = all.filter((x) => x.id !== OUTSIDE_ID);
-  const outside = all.find((x) => x.id === OUTSIDE_ID && x.eligible > 0);
+  const rows = all.filter((x) => x.seat);
+  const outside = all.find((x) => !x.seat && x.eligible > 0);
 
-  const share = (x: DistrictView, i: number) => (x.votes > 0 ? (x.partyVotes[i] ?? 0) / x.votes : 0);
   const value = (x: DistrictView): number | string => {
     if (sort.key === "name") return x.name.toLowerCase();
     if (sort.key === "margin") return x.votes > 0 ? x.margin : -1;
     if (sort.key === "turnout") return x.turnout;
     if (sort.key === "approval") return x.approval ?? -1;
-    return share(x, sort.key);
+    return partyShare(x, sort.key);
   };
   const sorted = rows.slice().sort((a, b) => {
     const va = value(a);
@@ -108,13 +96,16 @@ const DistrictTable = ({
 
   const Cells = ({ x }: { x: DistrictView }) => {
     const voted = x.votes > 0 && x.winner >= 0;
-    const seat = x.id !== OUTSIDE_ID;
+    const seat = x.seat;
     return (
       <>
-        <div className={seat ? "ea-td ea-td--name ea-bold" : "ea-td ea-td--name ea-dim"}>{x.name}</div>
+        <div className="ea-td ea-td--name">
+          <div className={seat ? "ea-bold ea-ellipsis" : "ea-dim ea-ellipsis"}>{x.name}</div>
+          {x.profile ? <div className="ea-muted ea-small ea-ellipsis">{x.profile}</div> : null}
+        </div>
         {parties.map((p, i) => (
           <div key={p.id} className={voted && seat && i === x.winner ? "ea-td ea-td--num ea-bold" : "ea-td ea-td--num ea-dim"}>
-            {voted ? pct(share(x, i)) : "-"}
+            {voted ? pct(partyShare(x, i)) : "-"}
           </div>
         ))}
         <div className="ea-td ea-td--num">{voted && seat ? `+${(x.margin * 100).toFixed(1)}` : "-"}</div>

@@ -175,3 +175,18 @@
 .ea-pager { display: flex; align-items: center; justify-content: space-between; margin-top: 10rem; }
 .ea-pager__label { text-align: center; }
 .ea-tr--outside { margin-top: 8rem; background-color: rgba(255, 255, 255, 0.04); border-left-color: rgba(255, 255, 255, 0.15); border-style: solid; }
+.ea-maprow { display: flex; align-items: center; justify-content: space-between; margin-top: 10rem; }
+.ea-btn--slim { margin: 0; padding: 4rem 10rem; font-size: 12rem; }
+
+/* ---------- map legend ---------- */
+
+.ea-legend-row { display: flex; align-items: center; padding: 4rem 0; }
+.ea-legend-row__name { flex: 1; margin-left: 2rem; }
+.ea-tint { margin: 10rem 0 6rem 0; }
+.ea-tint__bar {
+  height: 10rem;
+  border-radius: 5rem;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.95));
+}
+
+.ea-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

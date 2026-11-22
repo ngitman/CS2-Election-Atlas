@@ -1,7 +1,6 @@
-import { useMemo } from "react";
-import { bindValue, useValue, ValueBinding } from "cs2/api";
+import { bindValue } from "cs2/api";
 
-// Must match ElectionsUISystem.kGroup in C#.
+// Must match ElectionsUISystem.kGroup in C#. Shapes below mirror Systems/UiWriters.cs.
 export const GROUP = "electionAtlas";
 
 export type GovernmentState = "NoCityHall" | "AwaitingFounding" | "Active" | "Suspended";
@@ -51,8 +50,11 @@ export interface DistrictView {
   id: number;
   index: number;
   version: number;
-  selectable: boolean;
+  /** False for the outside-any-district bucket: no seat, nothing on the map to select. */
+  seat: boolean;
   name: string;
+  /** "Urban core", "Suburban", ... or "" until the census has seen the district. */
+  profile: string;
   eligible: number;
   votes: number;
   turnout: number;
@@ -83,19 +85,13 @@ export interface Polls {
 
 export const panelOpen$ = bindValue<boolean>(GROUP, "panelOpen", false);
 export const governmentState$ = bindValue<GovernmentState>(GROUP, "governmentState", "NoCityHall");
-export const overview$ = bindValue<string>(GROUP, "overview", "{}");
-export const districts$ = bindValue<string>(GROUP, "districts", "{}");
-export const history$ = bindValue<string>(GROUP, "history", "{}");
-export const polls$ = bindValue<string>(GROUP, "polls", "{}");
+// Raw bindings: C# writes these objects straight into the UI (no JSON strings to parse).
+export const overview$ = bindValue<Overview | null>(GROUP, "overview", null);
+export const districts$ = bindValue<Districts | null>(GROUP, "districts", null);
+export const history$ = bindValue<History | null>(GROUP, "history", null);
+export const polls$ = bindValue<Polls | null>(GROUP, "polls", null);
+/** The panel is collapsed to the map legend and districts are colored by result. */
+export const mapView$ = bindValue<boolean>(GROUP, "mapView", false);
 
-/** Decodes a JSON string binding once per change. */
-export function useJson<T>(binding: ValueBinding<string>): T | null {
-  const text = useValue(binding);
-  return useMemo(() => {
-    try {
-      return JSON.parse(text) as T;
-    } catch {
-      return null;
-    }
-  }, [text]);
-}
+/** A party's share of a district's votes. The one place this is computed in the UI. */
+export const partyShare = (d: DistrictView, party: number): number => (d.votes > 0 ? (d.partyVotes[party] ?? 0) / d.votes : 0);

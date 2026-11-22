@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { trigger, useValue } from "cs2/api";
 import { Panel } from "cs2/ui";
-import { Districts, districts$, GROUP, History, history$, Overview, overview$, panelOpen$, Polls, polls$, useJson } from "./bindings";
+import { districts$, GROUP, history$, mapView$, overview$, panelOpen$, polls$ } from "./bindings";
 import { DevSection } from "./DevSection";
 import { DistrictPopup } from "./DistrictPopup";
 import { DistrictsTab } from "./DistrictsTab";
 import { GovernmentStrip } from "./GovernmentStrip";
 import { HistoryTab, PartiesTab, PollsTab } from "./OtherTabs";
+import { MapLegend } from "./MapLegend";
 
 type Tab = "districts" | "history" | "polls" | "parties";
 const TABS: { id: Tab; label: string }[] = [
@@ -18,13 +19,18 @@ const TABS: { id: Tab; label: string }[] = [
 
 export const ElectionsPanel = () => {
   const open = useValue(panelOpen$);
-  const overview = useJson<Overview>(overview$);
-  const districts = useJson<Districts>(districts$);
-  const history = useJson<History>(history$);
-  const polls = useJson<Polls>(polls$);
+  const mapView = useValue(mapView$);
+  const overview = useValue(overview$);
+  const districts = useValue(districts$);
+  const history = useValue(history$);
+  const polls = useValue(polls$);
   const [tab, setTab] = useState<Tab>("districts");
   const [districtId, setDistrictId] = useState<number | null>(null);
   if (!open) return null;
+
+  // Map view: the panel collapses to a small legend so the colored districts are visible.
+  // The tab, popup choice and sort survive (state lives here), so "Back to results" returns where you were.
+  if (mapView) return <MapLegend d={districts} />;
 
   return (
     <>

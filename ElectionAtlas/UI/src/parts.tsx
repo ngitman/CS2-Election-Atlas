@@ -1,6 +1,7 @@
 import React from "react";
-import { PartyInfo } from "./bindings";
-import { pct } from "./format";
+import { trigger } from "cs2/api";
+import { Districts, GROUP, PartyInfo } from "./bindings";
+import { monthLabel, pct } from "./format";
 
 export const Dot = ({ color, large }: { color: string; large?: boolean }) => (
   <div className={large ? "ea-dot ea-dot--lg" : "ea-dot"} style={{ backgroundColor: color }} />
@@ -62,3 +63,24 @@ export const Sparkline = ({ values }: { values: (number | null)[] }) => (
     ))}
   </div>
 );
+
+/** Steps through past elections (‹ ›). Shared by the Districts tab and the map legend. */
+export const ElectionPicker = ({ d }: { d: Districts }) => {
+  const index = d.index ?? 0;
+  const older = index > 0;
+  const newer = index < d.count - 1;
+  return (
+    <div className="ea-picker">
+      <div className={older ? "ea-iconbtn" : "ea-iconbtn ea-iconbtn--off"} onClick={() => older && trigger(GROUP, "stepElection", -1)}>
+        ‹
+      </div>
+      <div className="ea-picker__title">
+        <div className="ea-bold">{`Election ${d.number} · ${monthLabel(d.month)}`}</div>
+        {d.count > 1 ? <div className="ea-muted ea-small">{`${index + 1} of ${d.count}`}</div> : null}
+      </div>
+      <div className={newer ? "ea-iconbtn" : "ea-iconbtn ea-iconbtn--off"} onClick={() => newer && trigger(GROUP, "stepElection", 1)}>
+        ›
+      </div>
+    </div>
+  );
+};

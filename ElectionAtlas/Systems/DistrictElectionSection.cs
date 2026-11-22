@@ -47,75 +47,52 @@ namespace ElectionAtlas.Systems
         protected override void OnProcess()
         {
             var e = selectedEntity;
-            long id = ((long)e.Version << 32) | (uint)e.Index;
+            long id = DistrictKey.Of(e);
             string name = m_NameSystem != null ? m_NameSystem.GetRenderedLabelName(e) : $"District {e.Index}";
 
             var ledger = m_Elections.Ledger;
-            m_View = DistrictViews.ForDistrict(ledger, id, name, out m_Election);
+            m_View = DistrictViews.ForDistrict(ledger, id, name, m_Elections.Profiles, out m_Election);
 
             var governing = System.Array.Find(m_Elections.CurrentParties(), p => p.Id == ledger.GoverningPartyId);
             m_GoverningName = governing?.Name ?? ledger.GoverningPartyId;
             m_GoverningColor = governing?.Color ?? 0x888888;
         }
 
+        /// <summary>Always the same properties, null where there's nothing (see the rule in UiWriters).</summary>
         public override void OnWriteProperties(IJsonWriter writer)
         {
-            var v = m_View;
-            writer.PropertyName("hasData");
-            writer.Write(v != null);
-            if (v == null)
-                return;
-
-            writer.PropertyName("governing");
-            writer.Write(m_GoverningName ?? "");
-            writer.PropertyName("governingColor");
-            writer.Write(Hex(m_GoverningColor));
-
-            writer.PropertyName("approval");
-            if (v.HasApproval) writer.Write(v.Approval); else writer.WriteNull();
-
-            writer.PropertyName("trend");
-            writer.ArrayBegin((uint)(v.Trend?.Length ?? 0));
-            if (v.Trend != null)
-                foreach (float f in v.Trend)
-                {
-                    if (float.IsNaN(f)) writer.WriteNull(); else writer.Write(f);
-                }
-            writer.ArrayEnd();
-
-            writer.PropertyName("election");
-            if (m_Election == null)
+            bool safe = false;
+#if DEV_TOOLS
+            // Check the nested shapes in managed code first; on a problem, write the same properties with nulls.
+            safe = !Dev.ShapeGuard.Check("district section", w =>
             {
-                writer.WriteNull();
-                return;
-            }
-
-            writer.TypeBegin("ElectionAtlas.DistrictResult");
-            writer.PropertyName("number"); writer.Write(m_Election.Number);
-            writer.PropertyName("month"); writer.Write(ElectionSchedule.MonthIndex(m_Election.Year, m_Election.Month));
-            writer.PropertyName("turnout"); writer.Write(v.Turnout);
-            writer.PropertyName("eligible"); writer.Write(v.Eligible);
-            writer.PropertyName("votes"); writer.Write(v.Votes);
-            writer.PropertyName("winner"); writer.Write(v.Winner);
-            writer.PropertyName("margin"); writer.Write(v.Margin);
-            writer.PropertyName("color"); writer.Write(Hex(v.Color));
-
-            writer.PropertyName("parties");
-            writer.ArrayBegin((uint)m_Election.Parties.Length);
-            for (int i = 0; i < m_Election.Parties.Length; i++)
-            {
-                var p = m_Election.Parties[i];
-                writer.TypeBegin("ElectionAtlas.PartyShare");
-                writer.PropertyName("name"); writer.Write(p.Name);
-                writer.PropertyName("color"); writer.Write(Hex(p.Color));
-                writer.PropertyName("share"); writer.Write(v.Share(i));
-                writer.PropertyName("votes"); writer.Write(v.PartyVotes != null && i < v.PartyVotes.Length ? v.PartyVotes[i] : 0L);
-                writer.TypeEnd();
-            }
-            writer.ArrayEnd();
-            writer.TypeEnd();
+                w.TypeBegin("ElectionAtlas.SectionCheck");
+                WriteProperties(w, false);
+                w.TypeEnd();
+            });
+#endif
+            WriteProperties(writer, safe);
         }
 
-        private static string Hex(uint rgb) => "#" + (rgb & 0xFFFFFF).ToString("x6");
+        private void WriteProperties(IJsonWriter writer, bool nullsOnly)
+        {
+            var view = nullsOnly ? null : m_View;
+            var election = nullsOnly ? null : m_Election;
+            writer.Prop("hasData", view != null);
+            writer.Prop("governing", m_GoverningName ?? "");
+            writer.PropColor("governingColor", m_GoverningColor);
+
+            writer.PropertyName("district");
+            if (view != null) writer.District(view); else writer.WriteNull();
+
+            writer.PropertyName("election");
+            if (election != null)
+            {
+                writer.TypeBegin("ElectionAtlas.Election");
+                writer.ElectionFields(election);
+                writer.TypeEnd();
+            }
+            else writer.WriteNull();
+        }
     }
 }
