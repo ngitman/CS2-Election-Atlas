@@ -33,6 +33,12 @@ export const HistoryTab = ({ h, shownIndex, onShow }: { h: History | null; shown
             </div>
             <StackBar parties={e.parties} shares={e.parties.map((p) => p.share ?? 0)} />
             <div className="ea-muted ea-small">{`Turnout ${pct(e.turnout)}`}</div>
+            <div className="ea-actions">
+              <div className="ea-btn" onClick={(event) => {
+                event.stopPropagation();
+                trigger(GROUP, "watchElectionDay", e.index);
+              }}>Watch Election Day</div>
+            </div>
           </div>
         );
       })}

@@ -27,6 +27,26 @@ namespace ElectionAtlas.Model
         MostDistricts,
     }
 
+    /// <summary>How a new election's result is shown (a player setting). Any past election can still be watched or skipped.</summary>
+    public enum ResultReveal
+    {
+        /// <summary>The final result appears at once, as in 0.1.</summary>
+        AllAtOnce,
+
+        /// <summary>Watch voting hours and district returns before opening the final result.</summary>
+        ElectionDay,
+    }
+
+    /// <summary>How fast a new election's Election Day plays (a player setting).</summary>
+    public enum ElectionDayPace
+    {
+        /// <summary>Realistic: follows the city clock. Polls open at 07:00, close at 19:00, and the count runs to midnight.</summary>
+        CityClock,
+
+        /// <summary>A few real seconds per hour and per report, whatever the city's speed.</summary>
+        Fast,
+    }
+
     /// <summary>The real-world turnout pattern the simulation is calibrated to.</summary>
     public enum TurnoutPreset
     {

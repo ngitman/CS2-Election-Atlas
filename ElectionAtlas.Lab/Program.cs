@@ -14,9 +14,19 @@ namespace ElectionAtlas.Lab
     internal static class Program
     {
         private const string Usage = @"Usage: dotnet run --project ElectionAtlas.Lab -- <city.csv | folder> [options]
+       dotnet run --project ElectionAtlas.Lab -- --sample [out.csv]
+       dotnet run --project ElectionAtlas.Lab -- --day-samples [folder]
 
   <city.csv>           a file from Developer > Export city CSV
   <folder>             runs the newest .csv in that folder
+  --sample [out.csv]   writes a synthetic 6-district city
+  --day-samples [folder]
+                       shows voting hours and district returns for the built-in
+                       sample elections (close race, four parties, outside
+                       residents); with a folder, also writes <name>.json fixtures
+  --day [N]            after each election, shows its Election Day: hourly
+                       turnout, then the count, N districts per wave (default 1)
+  --day-json FILE      with --day: writes the last Election Day as JSON
   --parties 2|4        test party lineup (default 2)
   --preset NAME        UsMunicipal | UsGeneral | UkGeneral | Nordic (default UsGeneral)
   --rule NAME          PopularVote | MostDistricts (default PopularVote)
@@ -25,6 +35,7 @@ namespace ElectionAtlas.Lab
   --seed N             seed for the first election (default 1)
   --profiles FILE      compare elections with district-profile effects
                       use the export's # district indices, e.g. 0=UrbanCore
+  --profile-strength S with --profiles: multiplies the lean offsets (default 1)
                       profiles: UrbanCore | Urban | Suburban | Rural | Industrial | Business | Unknown
                       both runs use the baseline incumbent and citywide turnout target";
 
@@ -57,6 +68,24 @@ namespace ElectionAtlas.Lab
                 return 0;
             }
 
+            if (args[0] == "--day-samples")
+            {
+                string outDir = args.Length > 1 ? args[1] : null;
+                foreach (var sample in SampleNights.All())
+                {
+                    var replay = ElectionNight.ByDistrict(sample.Value);
+                    var day = new ElectionDay(sample.Value);
+                    NightReport.PrintDay(day, sample.Key);
+                    NightReport.Print(replay, sample.Key);
+                    if (outDir == null) continue;
+                    string file = Path.Combine(outDir, sample.Key + ".json");
+                    NightReport.WriteJson(replay, sample.Key, file, day);
+                    Console.WriteLine($"  Wrote {Path.GetFullPath(file)}");
+                }
+
+                return 0;
+            }
+
             string path = ResolveCity(args[0]);
             var opts = ParseOptions(args.Skip(1).ToArray());
             int partyCount = int.Parse(Get(opts, "parties", "2"), CultureInfo.InvariantCulture);
@@ -65,6 +94,11 @@ namespace ElectionAtlas.Lab
             string incumbent = Get(opts, "incumbent", null);
             int elections = int.Parse(Get(opts, "elections", "1"), CultureInfo.InvariantCulture);
             ulong seed = ulong.Parse(Get(opts, "seed", "1"), CultureInfo.InvariantCulture);
+            string dayOpt = Get(opts, "day", null);
+            int wave = dayOpt == null ? 0 : int.Parse(dayOpt, CultureInfo.InvariantCulture);
+            string nightJson = Get(opts, "day-json", null);
+            if (dayOpt != null && wave < 1) throw new ArgumentException("--day needs 1 or more districts per wave.");
+            if (nightJson != null && dayOpt == null) throw new ArgumentException("--day-json needs --day.");
 
             GroupTable table;
             string[] names;
@@ -76,7 +110,8 @@ namespace ElectionAtlas.Lab
             var cfg = new ModelConfig();
             int outside = names[^1] == DistrictInfo.OutsideName ? names.Length - 1 : -1;
             string profilePath = Get(opts, "profiles", null);
-            var experiment = profilePath == null ? null : new ProfileExperiment(table, profilePath, outside);
+            float strength = float.Parse(Get(opts, "profile-strength", "1"), CultureInfo.InvariantCulture);
+            var experiment = profilePath == null ? null : new ProfileExperiment(table, profilePath, outside, strength);
 
             Console.WriteLine($"City: {Path.GetFileName(path)}{(source != null ? $" ({source})" : "")}");
             Console.WriteLine($"{table.TotalVoters:N0} voters in {table.Groups.Count:N0} groups, {table.DistrictCount} districts");
@@ -85,9 +120,22 @@ namespace ElectionAtlas.Lab
             var poll = ElectionModel.RunPoll(table, parties, incumbent, cfg);
             Console.WriteLine($"Poll before: approval {poll.Approval:0.0} · {string.Join(" · ", parties.Select((p, i) => $"{p.Name} {poll.Intention[i]:P1}"))}");
 
+            // Lab district ids: the index + 1 (the game packs entities instead), and the outside bucket's own id.
+            var districtInfos = names.Select((n, i) => i == outside ? DistrictInfo.Outside : new DistrictInfo(i + 1, n)).ToArray();
+            ElectionNight lastNight = null;
+            ElectionDay lastDay = null;
+
             for (int e = 0; e < elections; e++)
             {
                 var result = ElectionModel.RunElection(table, parties, incumbent, rule, preset, cfg, seed + (ulong)e, outsideDistrict: outside);
+                if (wave > 0)
+                {
+                    var snapshot = ElectionSnapshot.Capture(result, parties, districtInfos, e + 1, 2026 + e, 3, cfg.Map);
+                    lastNight = ElectionNight.ByDistrict(snapshot, wave);
+                    lastDay = new ElectionDay(snapshot);
+                    NightReport.PrintDay(lastDay, $"election {e + 1}");
+                    NightReport.Print(lastNight, $"election {e + 1}");
+                }
                 PrintElection(e + 1, result, parties, names);
                 if (experiment != null)
                 {
@@ -95,6 +143,12 @@ namespace ElectionAtlas.Lab
                     PrintProfileComparison(result, adjusted, experiment.Profiles, parties, names, outside);
                 }
                 incumbent = result.GoverningPartyId;
+            }
+
+            if (nightJson != null && lastNight != null)
+            {
+                NightReport.WriteJson(lastNight, Path.GetFileNameWithoutExtension(path), nightJson, lastDay);
+                Console.WriteLine($"  Wrote {Path.GetFullPath(nightJson)}");
             }
 
             return 0;
@@ -191,13 +245,23 @@ namespace ElectionAtlas.Lab
             var opts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < args.Length; i++)
             {
-                if (!args[i].StartsWith("--", StringComparison.Ordinal) || i + 1 >= args.Length)
+                if (!args[i].StartsWith("--", StringComparison.Ordinal))
                     throw new ArgumentException($"Unexpected argument '{args[i]}'. Run with --help.");
-                opts[args[i].Substring(2)] = args[++i];
+                string key = args[i].Substring(2);
+                bool hasValue = i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal);
+                if (hasValue) opts[key] = args[++i];
+                else if (OptionalValues.TryGetValue(key, out string fallback)) opts[key] = fallback;
+                else throw new ArgumentException($"'{args[i]}' needs a value. Run with --help.");
             }
 
             return opts;
         }
+
+        /// <summary>Options that may be given without a value, and the value they then take.</summary>
+        private static readonly Dictionary<string, string> OptionalValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["day"] = "1",
+        };
 
         private static string Get(Dictionary<string, string> opts, string key, string fallback) =>
             opts.TryGetValue(key, out var v) ? v : fallback;

@@ -101,6 +101,30 @@ export interface Polls {
   records: { month: number; approval: number; governing: string | null; intention: number[] }[];
 }
 
+export interface ElectionDayReplay {
+  number: number;
+  month: number;
+  rule: string;
+  voting: boolean;
+  playing: boolean;
+  finished: boolean;
+  sample: boolean;
+  live: boolean;
+  beforePolls: boolean;
+  hour: number;
+  ballots: number;
+  turnout: number;
+  counted: number;
+  districtsReported: number;
+  districtCount: number;
+  leader: number;
+  /** The provisional leader changed hands with this report. */
+  leadChanged: boolean;
+  districts: { name: string; ballots: number; turnout: number }[];
+  parties: PartyInfo[];
+  wave: string[];
+}
+
 export const panelOpen$ = bindValue<boolean>(GROUP, "panelOpen", false);
 export const citySession$ = bindValue<number>(GROUP, "citySession", 0);
 export const governmentState$ = bindValue<GovernmentState>(GROUP, "governmentState", "NoCityHall");
@@ -109,6 +133,7 @@ export const overview$ = bindValue<Overview | null>(GROUP, "overview", null);
 export const districts$ = bindValue<Districts | null>(GROUP, "districts", null);
 export const history$ = bindValue<History | null>(GROUP, "history", null);
 export const polls$ = bindValue<Polls | null>(GROUP, "polls", null);
+export const replay$ = bindValue<ElectionDayReplay | null>(GROUP, "replay", null);
 export const partyEditor$ = bindValue<PartyEditorState | null>(GROUP, "partyEditor", null);
 /** The panel is collapsed to the map legend and districts are colored by result. */
 export const mapView$ = bindValue<boolean>(GROUP, "mapView", false);

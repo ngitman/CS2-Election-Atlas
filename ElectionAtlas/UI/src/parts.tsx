@@ -22,30 +22,36 @@ export const ShareBar = ({ name, color, share, suffix }: { name: string; color: 
   </div>
 );
 
-/** All parties as one segmented bar with a legend underneath. */
-export const StackBar = ({ parties, shares }: { parties: PartyInfo[]; shares: number[] }) => (
-  <div>
-    <div className="ea-stack">
-      {parties.map((p, i) => (
-        <div key={p.id} style={{ width: `${Math.max(0, shares[i] ?? 0) * 100}%`, backgroundColor: p.color }} />
-      ))}
-    </div>
-    <div className="ea-legend">
-      {parties.map((p, i) => (
-        <div key={p.id} className="ea-legend__item">
-          <div className="ea-legend__line">
-            <Dot color={p.color} />
-            <span>{p.name}</span>
-            <span className="ea-bold" style={{ marginLeft: "6rem" }}>
-              {pct(shares[i] ?? 0)}
-            </span>
+/**
+ * All parties as one segmented bar with a legend underneath. Coherent mis-sizes wrapped
+ * flex lines (later rows overlap whatever follows), so the legend is a grid of fixed-size
+ * cells: `columns` per row, every cell the same height.
+ */
+export const StackBar = ({ parties, shares, legend = true, columns = 3 }: { parties: PartyInfo[]; shares: number[]; legend?: boolean; columns?: number }) => {
+  const withVotes = parties.some((p) => p.votes !== undefined);
+  const cell: React.CSSProperties = { width: `${100 / columns}%`, height: withVotes ? "42rem" : "24rem" };
+  return (
+    <div>
+      <div className="ea-stack">
+        {parties.map((p, i) => (
+          <div key={p.id} style={{ width: `${Math.max(0, shares[i] ?? 0) * 100}%`, backgroundColor: p.color }} />
+        ))}
+      </div>
+      {legend ? <div className="ea-legend">
+        {parties.map((p, i) => (
+          <div key={p.id} className="ea-legend__item" style={cell}>
+            <div className="ea-legend__line">
+              <Dot color={p.color} />
+              <span className="ea-legend__name">{p.name}</span>
+              <span className="ea-bold ea-legend__share">{pct(shares[i] ?? 0)}</span>
+            </div>
+            {p.votes !== undefined ? <div className="ea-muted ea-small ea-legend__votes">{`${count(p.votes)} votes`}</div> : null}
           </div>
-          {p.votes !== undefined ? <div className="ea-muted ea-small ea-legend__votes">{`${count(p.votes)} votes`}</div> : null}
-        </div>
-      ))}
+        ))}
+      </div> : null}
     </div>
-  </div>
-);
+  );
+};
 
 export const InfoLine = ({ label, children }: { label: React.ReactNode; children?: React.ReactNode }) => (
   <div className="ea-row">

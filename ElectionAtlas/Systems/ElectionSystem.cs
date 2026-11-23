@@ -15,6 +15,7 @@ using Deleted = Game.Common.Deleted;
 using District = Game.Areas.District;
 using Entity = Unity.Entities.Entity;
 using Temp = Game.Tools.Temp;
+using TimeData = Game.Common.TimeData;
 
 namespace ElectionAtlas.Systems
 {
@@ -32,6 +33,8 @@ namespace ElectionAtlas.Systems
     /// </summary>
     public partial class ElectionSystem : GameSystemBase
     {
+        internal enum ResultNotice { None, Immediate, Scheduled }
+
         private const int kIdleInterval = 512;
         private const int kReadInterval = 16;
         private const int kSliceHouseholds = 1024;  // about 0.2 ms of worker time per slice
@@ -40,6 +43,8 @@ namespace ElectionAtlas.Systems
         private CityHallSystem m_CityHall;
         private CityConfigurationSystem m_CityConfiguration;
         private TimeSystem m_Time;
+        private SimulationSystem m_Simulation;
+        private Unity.Entities.EntityQuery m_TimeDataQuery;
         private VoterReader m_Reader;
         private readonly ModelConfig m_Config = new ModelConfig();
         private readonly ProfileConfig m_ProfileConfig = new ProfileConfig();
@@ -78,7 +83,7 @@ namespace ElectionAtlas.Systems
         public DistrictInfo[] LatestPollDistricts { get; private set; }
 
         /// <summary>Set when an election result comes in; the UI opens the panel and clears it.</summary>
-        public bool PendingResultNotice { get; set; }
+        internal ResultNotice PendingResultNotice { get; set; }
 
         /// <summary>Dev builds: months added to the game date, to test the schedule without waiting.</summary>
         public int DevMonthOffset { get; private set; }
@@ -99,6 +104,8 @@ namespace ElectionAtlas.Systems
 
         public bool IsReading => m_Reader != null && m_Reader.InProgress;
         public bool IsCountingElection => IsReading && m_PendingElection;
+        // The HUD clock uses elapsed simulation frames. The lighting clock can include a time-of-day offset.
+        internal uint CityClockTicks => m_Simulation.frameIndex - m_TimeDataQuery.GetSingleton<TimeData>().m_FirstFrame;
 
         public override int GetUpdateInterval(SystemUpdatePhase phase) => IsReading ? kReadInterval : kIdleInterval;
 
@@ -108,6 +115,8 @@ namespace ElectionAtlas.Systems
             m_CityHall = World.GetOrCreateSystemManaged<CityHallSystem>();
             m_CityConfiguration = World.GetOrCreateSystemManaged<CityConfigurationSystem>();
             m_Time = World.GetOrCreateSystemManaged<TimeSystem>();
+            m_Simulation = World.GetOrCreateSystemManaged<SimulationSystem>();
+            m_TimeDataQuery = GetEntityQuery(Unity.Entities.ComponentType.ReadOnly<TimeData>());
             m_Reader = new VoterReader(this);
             m_DistrictQuery = EntityManager.CreateEntityQuery(new Unity.Entities.EntityQueryDesc
             {
@@ -157,7 +166,7 @@ namespace ElectionAtlas.Systems
             LatestPoll = null;
             LatestPollDistrictNames = null;
             LatestPollDistricts = null;
-            PendingResultNotice = false;
+            PendingResultNotice = ResultNotice.None;
             DataVersion++;
         }
 
@@ -271,7 +280,7 @@ namespace ElectionAtlas.Systems
                 UpdateProfiles(districts);
                 if (m_PendingPoll || m_PendingElection)
                 {
-                    Process(table, districts, names, m_PendingMonth, m_PendingPoll, m_PendingElection, ReadNote("on the spot"));
+                    Process(table, districts, names, m_PendingMonth, m_PendingPoll, m_PendingElection, ReadNote("on the spot"), scheduled: true);
                     m_PendingPoll = m_PendingElection = false;
                 }
                 else
@@ -290,7 +299,7 @@ namespace ElectionAtlas.Systems
                 DataVersion++;
                 if (tick.RunPoll || tick.RunElection)
                 {
-                    if (!TryProcessCensus(now, tick.RunPoll, tick.RunElection))
+                    if (!TryProcessCensus(now, tick.RunPoll, tick.RunElection, scheduled: true))
                     {
                         m_PendingPoll = tick.RunPoll;
                         m_PendingElection = tick.RunElection;
@@ -317,12 +326,12 @@ namespace ElectionAtlas.Systems
         private string ReadNote(string how) =>
             $"{m_ReadHouseholds:N0} households read in {m_ReadSlices} worker slices ({how})";
 
-        private bool TryProcessCensus(int month, bool poll, bool election)
+        private bool TryProcessCensus(int month, bool poll, bool election, bool scheduled)
         {
             if (m_Census == null || m_CensusMonth != month - 1)
                 return false;
 
-            Process(m_Census, m_CensusDistricts, m_CensusNames, month, poll, election, ReadNote("census from last month"));
+            Process(m_Census, m_CensusDistricts, m_CensusNames, month, poll, election, ReadNote("census from last month"), scheduled);
             ClearCensus();
             return true;
         }
@@ -370,7 +379,8 @@ namespace ElectionAtlas.Systems
         }
 
         /// <summary>Runs the poll and/or election on a finished read and records them.</summary>
-        private void Process(GroupTable table, DistrictInfo[] districts, string[] names, int month, bool poll, bool election, string readNote)
+        private void Process(GroupTable table, DistrictInfo[] districts, string[] names, int month, bool poll, bool election,
+            string readNote, bool scheduled)
         {
             if (table.TotalVoters == 0)
             {
@@ -396,7 +406,7 @@ namespace ElectionAtlas.Systems
                 Ledger.RecordElection(snapshot, month, Cadence);
                 m_CityHall.ApplyFoundingElection();
                 m_LastGateState = m_CityHall.State;
-                PendingResultNotice = true;
+                PendingResultNotice = scheduled ? ResultNotice.Scheduled : ResultNotice.Immediate;
 
                 Mod.Log.Info($"Election #{number} ({ElectionSchedule.Format(month)}): turnout {snapshot.Turnout:P1}, " +
                     string.Join(", ", snapshot.Parties.Select((p, i) => $"{p.Name} {snapshot.Share(i):P1}")) +
@@ -430,7 +440,7 @@ namespace ElectionAtlas.Systems
             var sw = Stopwatch.StartNew();
             var table = m_Reader.ReadAll(out var districts, out var names);
             UpdateProfiles(districts);
-            Process(table, districts, names, month, poll, election, $"full read {sw.Elapsed.TotalMilliseconds:0.0} ms");
+            Process(table, districts, names, month, poll, election, $"full read {sw.Elapsed.TotalMilliseconds:0.0} ms", scheduled: false);
         }
 
         /// <summary>Reads the whole city now and holds an election (plus a poll). Works while paused.</summary>
@@ -502,7 +512,7 @@ namespace ElectionAtlas.Systems
             m_PendingPoll = poll;
             m_PendingElection = election;
             m_PendingMonth = now;
-            if (TryProcessCensus(now, poll, election)) m_Reader.Cancel();
+            if (TryProcessCensus(now, poll, election, scheduled: false)) m_Reader.Cancel();
             else ReadAndProcessNow(now, poll, election);
             m_PendingPoll = m_PendingElection = false;
 
@@ -518,6 +528,7 @@ namespace ElectionAtlas.Systems
             m_PendingPoll = m_PendingElection = false;
             var state = m_CityHall.State;
             Ledger = new ElectionLedger();
+            PendingResultNotice = ResultNotice.None;
             Ledger.OnGovernmentChanged(GovernmentState.NoCityHall, state == GovernmentState.Active || state == GovernmentState.Suspended ? GovernmentState.AwaitingFounding : state, NowMonth, Cadence);
             if (state != GovernmentState.NoCityHall) m_CityHall.DevSetState(GovernmentState.AwaitingFounding);
             m_LastGateState = m_CityHall.State;

@@ -4,6 +4,8 @@ Election results for every district of your city, as exact numbers and as maps. 
 
 > **First release in testing.** Elections, polls, and the district map have run in game. See the combined [release checklist](TESTING.md).
 
+See the [release roadmap](ROADMAP.md) for Election Day, precincts, and later policy features.
+
 ## Status
 
 - The monthly census reads households in worker-thread slices during the last quarter of each month. Elections and polls use the census at the month boundary. A City Hall shutdown reduces government approval and support.
@@ -149,6 +151,8 @@ dotnet run --project ElectionAtlas.Lab -- "$env:USERPROFILE\AppData\LocalLow\Col
 ```
 
 A folder argument uses its newest CSV. `--preset`, `--rule`, `--incumbent` and `--seed` change the run, and `--sample <file>` writes a synthetic city if you don't have one yet. Copy exported CSVs into `ElectionAtlas.Model.Tests\Cities\` and `dotnet test` replays them too.
+
+Run `dotnet run --project ElectionAtlas.Lab -- --day-samples` to see voting hours and district returns for the built-in elections. Add `--day` to a city CSV run to preview its turnout and count.
 
 ## Notes
 

@@ -33,6 +33,12 @@ namespace ElectionAtlas
         [SettingsUISection(kSection, kScheduleGroup)]
         public bool PauseWithoutCityHall { get; set; }
 
+        [SettingsUISection(kSection, kScheduleGroup)]
+        public ResultReveal ResultReveal { get; set; }
+
+        [SettingsUISection(kSection, kScheduleGroup)]
+        public ElectionDayPace ElectionDayPace { get; set; }
+
         [SettingsUISection(kSection, kRulesGroup)]
         public GoverningRule GoverningRule { get; set; }
 
@@ -88,6 +94,8 @@ namespace ElectionAtlas
         {
             Cadence = ElectionCadence.EveryYear;
             PauseWithoutCityHall = true;
+            ResultReveal = ResultReveal.ElectionDay;
+            ElectionDayPace = ElectionDayPace.CityClock;
             GoverningRule = GoverningRule.PopularVote;
             TurnoutPreset = TurnoutPreset.UsGeneral;
             PartyLineup = PartyLineup.TwoParties;
