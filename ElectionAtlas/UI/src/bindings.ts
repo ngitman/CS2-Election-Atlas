@@ -142,6 +142,8 @@ export const history$ = bindValue<History | null>(GROUP, "history", null);
 export const polls$ = bindValue<Polls | null>(GROUP, "polls", null);
 export const replay$ = bindValue<ElectionDayReplay | null>(GROUP, "replay", null);
 export const electionNotice$ = bindValue<ElectionNotice | null>(GROUP, "electionNotice", null);
+/** The newest election's Election Day is live (or its count is waiting to be seen): show the button beside Chirper. */
+export const liveElection$ = bindValue<boolean>(GROUP, "liveElection", false);
 export const partyEditor$ = bindValue<PartyEditorState | null>(GROUP, "partyEditor", null);
 /** The panel is collapsed to the map legend and districts are colored by result. */
 export const mapView$ = bindValue<boolean>(GROUP, "mapView", false);

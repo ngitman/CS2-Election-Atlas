@@ -23,8 +23,11 @@ namespace ElectionAtlas
         public const string kSaveGroup = "Saving";
         public const string kDebugGroup = "Debug";
 
+        // The game never calls SetDefaults on its own (neither ModSetting nor Setting does in its constructor), so a
+        // value missing from the settings file would otherwise stay at the C# default (false, or an enum's first value).
         public Setting(IMod mod) : base(mod)
         {
+            SetDefaults();
         }
 
         [SettingsUISection(kSection, kScheduleGroup)]

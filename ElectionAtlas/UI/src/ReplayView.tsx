@@ -2,7 +2,7 @@ import React from "react";
 import { trigger } from "cs2/api";
 import { Scrollable } from "cs2/ui";
 import { ElectionDayReplay, GROUP } from "./bindings";
-import { count, monthLabel, pct } from "./format";
+import { clock, count, monthLabel, pct } from "./format";
 import { Dot, StackBar } from "./parts";
 
 export const ReplayView = ({ r, map = false, onResults }: { r: ElectionDayReplay; map?: boolean; onResults: () => void }) => {
@@ -13,9 +13,8 @@ export const ReplayView = ({ r, map = false, onResults }: { r: ElectionDayReplay
   const ranked = r.parties.map((party, index) => ({ party, index }))
     .sort((a, b) => (b.party.votes ?? 0) - (a.party.votes ?? 0) || a.index - b.index)
     .map(({ party }) => party);
-  const clock = `${r.hour < 10 ? "0" : ""}${r.hour}:00`;
   const polls = r.beforePolls ? "Opens at 07:00" : r.voting ? "Polls open" : "Polls closed";
-  const headline = r.finished ? "Final result" : `${clock} · ${polls}`;
+  const headline = r.finished ? "Final result" : `${clock(r.hour)} · ${polls}`;
   const wave = r.wave.join(", ");
   const report = r.finished ? "Count complete" : wave ? `Reporting · ${wave}` : "Awaiting district returns";
   const leaderLabel = leader

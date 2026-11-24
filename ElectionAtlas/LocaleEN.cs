@@ -42,7 +42,7 @@ namespace ElectionAtlas
                 { m_Setting.GetEnumValueLocaleID(ElectionDayPace.CityClock), "City clock" },
                 { m_Setting.GetEnumValueLocaleID(ElectionDayPace.Fast), "Faster" },
                 { m_Setting.GetOptionLabelLocaleID(nameof(Setting.ElectionNotifications)), "Election notifications" },
-                { m_Setting.GetOptionDescLocaleID(nameof(Setting.ElectionNotifications)), "Show a popup when polls close and when the election results are ready." },
+                { m_Setting.GetOptionDescLocaleID(nameof(Setting.ElectionNotifications)), "During Election Day, show a button next to Chirper that opens the live count, and a notice when the polls close and when the results are in. With Show final results, only the results notice appears." },
 
                 { m_Setting.GetOptionLabelLocaleID(nameof(Setting.GoverningRule)), "Who governs" },
                 { m_Setting.GetOptionDescLocaleID(nameof(Setting.GoverningRule)), "Popular vote: the largest citywide share governs. Most districts: the party that wins the most districts governs; a tie goes to the popular vote." },

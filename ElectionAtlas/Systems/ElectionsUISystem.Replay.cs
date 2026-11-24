@@ -48,8 +48,8 @@ namespace ElectionAtlas.Systems
             if ((uint)index >= (uint)archive.Count) return;
             SelectElection(index, archive.Count);
 
-            // Watching the election whose live day is running goes back into it instead of restarting it.
-            if (m_LiveElectionDay.HasValue && m_Replay.Night.Snapshot == archive[index])
+            // Watching the election whose live day or live election is running goes back into it instead of restarting it.
+            if (m_Replay != null && m_Replay.Night.Snapshot == archive[index] && (m_LiveElectionDay.HasValue || m_LiveElection != null))
             {
                 Invalidate();
                 m_ReplayBinding.Update();
@@ -66,7 +66,7 @@ namespace ElectionAtlas.Systems
             var watch = System.Diagnostics.Stopwatch.StartNew();
 #endif
             if (waveSize <= 0) waveSize = ElectionNightPlayback.WaveSizeFor(ElectionNight.DistrictsWithVoters(snapshot));
-            if (m_NoticeElection != snapshot) m_NoticeElection = null;
+            if (m_LiveElection != snapshot) EndLiveElection();
             m_Replay = new ElectionNightPlayback(ElectionNight.ByDistrict(snapshot, waveSize), secondsPerFrame);
             m_ReplayArchiveIndex = index;
             m_LiveElectionDay = null;
@@ -88,8 +88,8 @@ namespace ElectionAtlas.Systems
 
         private void EndReplay()
         {
-            m_NoticeElection = null;
             if (m_Replay == null) return;
+            EndLiveElection();
             m_Replay = null;
             m_ReplayArchiveIndex = -1;
             m_LiveElectionDay = null;
@@ -156,7 +156,7 @@ namespace ElectionAtlas.Systems
         {
             m_ReplayBinding.Update();
             SyncDistrictSection();
-            ObserveReplayForNotice();
+            ObserveLiveElection();
 #if DEV_TOOLS
             if (!frameChanged) return;
             var frame = m_Replay.Frame;
@@ -203,7 +203,8 @@ namespace ElectionAtlas.Systems
             if (index < 0) return "Run an election first.";
             EndReplay();
             WatchElectionDay(index, useCityClock: true);
-            return "Watching the latest election on the city clock.";
+            BeginLiveElection(); // as a scheduled day would, so the button and notices can be tested
+            return "Watching the latest election on the city clock, as a live Election Day.";
         }
 
         internal string DevWatchSample(string name)

@@ -1,6 +1,7 @@
 import { ModRegistrar } from "cs2/modding";
 import { DistrictSection } from "./DistrictSection";
 import { ElectionsPanel } from "./ElectionsPanel";
+import { LiveElection } from "./LiveElection";
 import { ToolbarButton } from "./ToolbarButton";
 
 // Tells the game to load ElectionAtlas.css next to this module (webpack emits it from src/styles.css).
@@ -13,6 +14,8 @@ const DISTRICT_SECTION_TYPE = "ElectionAtlas.Systems.DistrictElectionSection";
 const register: ModRegistrar = (moduleRegistry) => {
   moduleRegistry.append("GameTopLeft", ToolbarButton);
   moduleRegistry.append("Game", ElectionsPanel);
+  // The game's right-hand column (notifications, Chirper, followed citizens) renders this slot on top.
+  moduleRegistry.append("GameBottomRight", LiveElection);
 
   // "Election" section in the info panel of a district selected in the city.
   moduleRegistry.extend(SECTIONS_MODULE, "selectedInfoSectionComponents", (components: any) => {

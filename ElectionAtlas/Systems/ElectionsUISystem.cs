@@ -50,7 +50,7 @@ namespace ElectionAtlas.Systems
             AddBinding(m_Polls = new RawValueBinding(kGroup, "polls", Guarded("polls", WritePolls)));
             BindPartyEditor();
             BindReplay();
-            BindElectionNotice();
+            BindLiveElection();
 #if !DEV_TOOLS
             AddBinding(new ValueBinding<bool>(kGroup, "devTools", false));
             AddBinding(new ValueBinding<string>(kGroup, "devStatus", ""));
@@ -65,6 +65,12 @@ namespace ElectionAtlas.Systems
             AddBinding(new TriggerBinding(kGroup, "hideMap", () => m_MapView.Update(false)));
 
             Mod.Log.Info("Elections UI bindings registered");
+        }
+
+        protected override void OnDestroy()
+        {
+            UnbindLiveElection();
+            base.OnDestroy();
         }
 
         protected override void OnGamePreload(Purpose purpose, GameMode mode)
@@ -85,8 +91,9 @@ namespace ElectionAtlas.Systems
         {
             base.OnUpdate();
             if (!m_Elections.HasLoadedCity) return;
-            if (m_NoticeSnapshot != null && (!ElectionNotificationsEnabled || !IsArchived(m_NoticeSnapshot)))
-                ClearElectionNotice();
+#if DEV_TOOLS
+            if (m_NoticeSnapshot != null && !IsArchived(m_NoticeSnapshot)) ClearElectionNotice(); // after a dev Reset
+#endif
 
             // Only touch the binding when the state changes (Enum.ToString allocates).
             var state = m_CityHall.State;
@@ -108,17 +115,15 @@ namespace ElectionAtlas.Systems
                 var archive = m_Elections.Ledger.Archive;
                 if (Mod.Settings?.ResultReveal == ResultReveal.ElectionDay)
                 {
-                    m_NoticeElection = archive.Latest;
-                    m_NoticeSawPollsClose = false;
                     WatchElectionDay(archive.Count - 1,
                         resultNotice == ElectionSystem.ResultNotice.Scheduled && Mod.Settings.ElectionDayPace == ElectionDayPace.CityClock);
+                    BeginLiveElection();
                 }
-                else if (archive.Latest != null)
-                    ShowElectionNotice(archive.Latest, results: true);
+                else ShowElectionNotice(archive.Latest, results: true);
                 Invalidate();
             }
 
-            // A new election can keep counting with its panel closed so the notices can reopen it.
+            // The live election and any city-clock day keep playing while the panel is closed.
             UpdateReplay();
             if (!m_PanelOpen.value && !opening) return;
             RefreshPanel();
@@ -189,9 +194,12 @@ namespace ElectionAtlas.Systems
         /// <summary>Closing the panel (or the map legend) also ends the map view, so the overlay goes with it.</summary>
         private void ClosePanel()
         {
+            // The live election's finished count has been on screen, so its button goes.
+            if (m_PanelOpen.value && m_LiveElection != null && m_Replay.IsFinished) EndLiveElection();
             m_PanelOpen.Update(false);
             m_MapView.Update(false);
-            if (m_NoticeElection == null || !ElectionNotificationsEnabled) EndTimedReplay();
+            // With notifications on, the live election keeps playing for its button and notices.
+            if (m_LiveElection == null || !m_NotificationsOn) EndTimedReplay();
         }
 
         private void StepElection(int delta)

@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { trigger, useValue } from "cs2/api";
 import { Panel, Scrollable } from "cs2/ui";
 import { citySession$, districts$, GROUP, history$, mapView$, overview$, panelOpen$, polls$, replay$ } from "./bindings";
 import { DevToggle, DevWindow } from "./DevSection";
 import { DistrictPopup } from "./DistrictPopup";
 import { DistrictsTab } from "./DistrictsTab";
-import { ElectionNoticePopup } from "./ElectionNoticePopup";
 import { GovernmentStrip } from "./GovernmentStrip";
+import { onViewResults } from "./LiveElection";
 import { HistoryTab, PollsTab } from "./OtherTabs";
 import { PartiesTab } from "./PartiesTab";
 import { MapLegend } from "./MapLegend";
@@ -36,6 +36,11 @@ const CityElectionsPanel = () => {
   const [tab, setTab] = useState<Tab>("districts");
   const [districtId, setDistrictId] = useState<number | null>(null);
   const [devOpen, setDevOpen] = useState(false);
+  // A results notice's View results shows that election on the Districts tab.
+  useEffect(() => onViewResults(() => {
+    setTab("districts");
+    setDistrictId(null);
+  }), []);
   // Preserve a draft party lineup and leave the idle results table alone while the replay updates.
   const results = useMemo(() => (
     <>
@@ -59,11 +64,7 @@ const CityElectionsPanel = () => {
       </Scrollable>
     </>
   ), [overview, tab, districts, districtId, history, polls]);
-  const notice = <ElectionNoticePopup onViewResults={() => {
-    setTab("districts");
-    setDistrictId(null);
-  }} />;
-  if (!open) return <>{notice}</>;
+  if (!open) return null;
 
   const city = overview?.cityName;
   const save = overview?.loadedSaveName;
@@ -75,11 +76,10 @@ const CityElectionsPanel = () => {
     trigger(GROUP, "closeReplay");
     if (!replay?.sample) setTab("districts");
   };
-  if (mapView) return <>{notice}<MapLegend d={districts} cityContext={cityContext} replay={replay} onResults={replayResults} /></>;
+  if (mapView) return <MapLegend d={districts} cityContext={cityContext} replay={replay} onResults={replayResults} />;
 
   return (
     <>
-      {notice}
       <Panel draggable header={replay ? "Election Day" : "Elections"} initialPosition={{ x: 0.42, y: 0.25 }} onClose={() => trigger(GROUP, "closePanel")} style={{ width: replay ? "416rem" : "580rem" }}>
         <div className="ea-body">
           {cityContext ? <div className="ea-muted ea-small ea-ellipsis ea-city-context" title={cityContext}>{cityContext}</div> : null}

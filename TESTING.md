@@ -47,13 +47,16 @@ Use the same Debug build and save copies as above. If the build is already insta
 
 If a step fails, send the step number, save name, election number, and matching log lines from `Logs\ElectionAtlas.Mod.log`.
 
-## Election notifications
+## Live election button and notices
 
-1. Start a Debug build and load a test city with an archived election. In **Options → Election Atlas**, check that **Election notifications** is on. Open **Developer tools → Election notifications** and choose **Show polls-closed notice**. Close the Elections panel while the popup is visible, then choose **Watch**. The latest election's Election Day view should open.
-2. Choose **Show results notice** and check the governing party name. **View results** should open the **Districts** tab on that election. Preview it again and wait eight seconds to check that it disappears. Preview it once more and check **Dismiss**.
-3. Set **Election results** to **Watch Election Day** and use **Run election** in the developer window. **Skip to count** should show the polls-closed notice once. Close the panel and choose **Watch**. The view should return to counting, then **Final result** should show the results notice. On a scheduled city-clock day, verify the popup at 19:00 and the results notice at midnight. Replaying the archived election afterward should produce zero notices.
-4. Set **Election results** to **Show final results** and run another election. Only the results notice should appear. Turn **Election notifications** off while the popup is visible and check it closes. Both preview commands should respect the setting.
-5. With notifications back on, show a preview and switch saves. The popup should clear. For each notice shown, look for `[election day] notice: polls closed for election #` or `[election day] notice: results for election #` in `Logs\ElectionAtlas.Mod.log`.
+Core checks only. Use a Debug build and a named test copy with a City Hall and at least one election in **History**. In **Options → Election Atlas**, set **Election results** to **Watch Election Day**; **Election notifications** is on by default. Log lines are in `Logs\ElectionAtlas.Mod.log`. A **Run election** day plays at 3 seconds per hour, so the polls close about 36 seconds after it starts.
+
+1. **Button and polls-closed notice.** Open the Elections panel and choose **Developer tools → Run election**, then close the Elections panel itself at once (its X or the toolbar button; closing only the Developer tools window leaves it open). A round button appears at the bottom right, directly above the Chirper button, with a badge to its left such as `Polls open · 09:00 · 6% turnout`. At 19:00 a notice replaces the badge: `Polls have closed in <city>. Watch the count`. Within 8 seconds (it then hides itself), choose **Watch**: the panel opens on the count. Click the round button: the panel closes. Log: `[election day] live button: shown for election #N`, `notice: polls closed for election #N, shown`, `..., Watch`, `live button: closed the panel`.
+2. **Count and results notice.** Leave the panel closed. The badge reads `Counting · 3 of 10 districts` and moves on as districts report. Click the button once to open the count and again to close it. When the count ends, `Results are in: <party> governs` appears. Choose **View results**: the **Districts** tab opens on that election, and the round button disappears. Log: `live button: opened the replay of election #N`, `[election day] final:`, `notice: results for election #N, shown`, `..., View results`, `live button: hidden`.
+3. **Setting off and on.** Choose **Developer tools → Election Day replays → Use city clock**, then close the panel; the button shows. In Options, turn **Election notifications** off: back in the city, the button is gone. Turn it on: the button is back. Log: `notice: notifications turned off`, `live button: hidden`, then `notifications turned on`, `live button: shown`.
+4. **Load a save while it's live.** With the button showing, load another save. After loading, there's no button and no notice, and the panel shows only the new city's history. Log: `[election day] replay closed`, `live button: hidden`; no exceptions in `Player.log`.
+
+If a step fails, send the step number, what you saw (a screenshot of the bottom-right corner helps), the election number, and that step's `[election day]` lines.
 
 ## Release checks
 

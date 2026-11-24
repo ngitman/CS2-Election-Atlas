@@ -169,13 +169,62 @@
 .ea-btn--primary:hover { background-color: #3f8ce8; }
 .ea-btn--on { background-color: rgba(125, 180, 255, 0.35); }
 
-/* ---------- election notifications ---------- */
+/* ---------- live election button and notices ---------- */
+
+/* The game's right-hand column (notifications, Chirper) is a narrow stack anchored bottom right, and this item
+   sits on top of it. The status badge and the notices extend to its left, as the game's chirps do. */
+.ea-live { position: relative; width: var(--toolbarToggleButtonSize, 32rem); pointer-events: none; }
+.ea-live--button { height: var(--toolbarToggleButtonSize, 32rem); margin-bottom: 10rem; }
+.ea-live__item {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: rgba(23, 31, 43, 0.94);
+  pointer-events: auto;
+}
+.ea-live__item:hover { background-color: rgba(38, 50, 68, 0.96); }
+.ea-live__item--on, .ea-live__item--on:hover { background-color: #2f7bd8; }
+.ea-live__glyph {
+  width: 60%;
+  height: 60%;
+  background-color: rgba(255, 255, 255, 0.92);
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+}
+.ea-live__side {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 400rem;
+  margin-right: 8rem;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  pointer-events: none;
+}
+.ea-live__badge {
+  display: flex;
+  align-items: center;
+  padding: 5rem 12rem;
+  border-radius: 14rem;
+  background-color: rgba(23, 31, 43, 0.94);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13rem;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.ea-live__badge:hover { background-color: rgba(38, 50, 68, 0.96); }
 
 .ea-notice {
   position: absolute;
-  right: 24rem;
-  bottom: 108rem;
-  z-index: 10;
+  right: 100%;
+  bottom: 0;
+  margin-right: 8rem;
   width: 320rem;
   box-sizing: border-box;
   padding: 12rem 14rem;
@@ -186,7 +235,6 @@
   font-size: 14rem;
   pointer-events: auto;
 }
-.ea-notice__detail { margin-top: 4rem; color: rgba(255, 255, 255, 0.76); }
 .ea-notice__actions { display: flex; margin-top: 10rem; }
 .ea-notice__actions .ea-btn { margin-bottom: 0; }
 
