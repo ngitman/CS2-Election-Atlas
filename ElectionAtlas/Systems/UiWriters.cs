@@ -114,18 +114,97 @@ namespace ElectionAtlas.Systems
             int count = s?.Parties.Length ?? 0;
             w.ArrayBegin((uint)count);
             for (int i = 0; i < count; i++)
+                w.PartyResult(s.Parties[i], s.PartyVotes[i], s.Votes, s.DistrictsWon[i]);
+            w.ArrayEnd();
+        }
+
+        private static void PartyResult(this IJsonWriter w, PartySnapshot party, long votes, long total, int seats)
+        {
+            w.TypeBegin("ElectionAtlas.PartyResult");
+            w.Prop("id", party.Id);
+            w.Prop("name", party.Name);
+            w.PropColor("color", party.Color);
+            w.Prop("share", total > 0 ? (float)((double)votes / total) : 0f);
+            w.Prop("votes", votes);
+            w.Prop("won", seats);
+            w.TypeEnd();
+        }
+
+        public static void ElectionNotice(this IJsonWriter w, int id, bool results, string cityName, string governingParty)
+        {
+            w.TypeBegin("ElectionAtlas.ElectionNotice");
+            w.Prop("id", id);
+            w.Prop("results", results);
+            w.Prop("cityName", cityName);
+            w.Prop("governingParty", governingParty);
+            w.TypeEnd();
+        }
+
+        public static void ElectionDayReplay(this IJsonWriter w, ElectionNightPlayback play, bool sample)
+        {
+            var snapshot = play.Night.Snapshot;
+            var report = play.Frame;
+            bool voting = play.IsVoting;
+            long ballots = play.Day.BallotsCastAt(play.Hour);
+
+            // V3: adds leadChanged (Cohtml keeps each type name's first property list, so a new shape needs a new name).
+            w.TypeBegin("ElectionAtlas.DayReplayV3");
+            w.Prop("number", snapshot.Number);
+            w.Prop("month", ElectionSchedule.MonthIndex(snapshot.Year, snapshot.Month));
+            w.Prop("rule", snapshot.Rule.ToString());
+            w.Prop("voting", voting);
+            w.Prop("playing", play.IsPlaying);
+            w.Prop("finished", play.IsFinished);
+            w.Prop("sample", sample);
+            w.Prop("live", play.FollowsGameClock);
+            w.Prop("beforePolls", play.BeforePolls);
+            w.Prop("hour", play.Hour);
+            w.Prop("ballots", ballots);
+            w.Prop("turnout", snapshot.Eligible > 0 ? (float)((double)ballots / snapshot.Eligible) : 0f);
+            w.Prop("counted", voting ? 0L : report.Votes);
+            // Districts nobody lives in have nothing to count: they're left out of "n of k" and the voting list.
+            w.Prop("districtsReported", voting ? 0 : report.ContestedSeatsReported);
+            w.Prop("districtCount", report.ContestedSeatCount);
+            w.Prop("leader", voting ? -1 : report.LeaderIndex);
+            w.Prop("leadChanged", !voting && report.LeadChanged);
+
+            int votingDistricts = 0;
+            if (voting)
+                for (int i = 0; i < snapshot.Districts.Length; i++)
+                    if (play.Night.HasVoters(i)) votingDistricts++;
+            w.PropertyName("districts");
+            w.ArrayBegin((uint)votingDistricts);
+            if (voting)
             {
-                var p = s.Parties[i];
-                w.TypeBegin("ElectionAtlas.PartyResult");
-                w.Prop("id", p.Id);
-                w.Prop("name", p.Name);
-                w.PropColor("color", p.Color);
-                w.Prop("share", s.Share(i));
-                w.Prop("votes", s.PartyVotes[i]);
-                w.Prop("won", s.DistrictsWon[i]);
-                w.TypeEnd();
+                for (int i = 0; i < snapshot.Districts.Length; i++)
+                {
+                    if (!play.Night.HasVoters(i)) continue;
+                    var district = snapshot.Districts[i];
+                    long districtBallots = play.Day.DistrictBallotsCastAt(i, play.Hour);
+                    w.TypeBegin("ElectionAtlas.DayDistrict");
+                    w.Prop("name", district.Name);
+                    w.Prop("ballots", districtBallots);
+                    w.Prop("turnout", district.Eligible > 0 ? (float)((double)districtBallots / district.Eligible) : 0f);
+                    w.TypeEnd();
+                }
             }
             w.ArrayEnd();
+
+            w.PropertyName("parties");
+            w.ArrayBegin(voting ? 0 : (uint)snapshot.Parties.Length);
+            if (!voting)
+            {
+                for (int p = 0; p < snapshot.Parties.Length; p++)
+                    w.PartyResult(snapshot.Parties[p], report.PartyVotes(p), report.Votes, report.Seats(p));
+            }
+            w.ArrayEnd();
+
+            w.PropertyName("wave");
+            w.ArrayBegin(voting || report.Index == 0 ? 0 : (uint)report.WaveCount);
+            if (!voting && report.Index > 0)
+                for (int i = 0; i < report.WaveCount; i++) w.Write(play.Night.Units[report.WaveUnit(i)].Name ?? string.Empty);
+            w.ArrayEnd();
+            w.TypeEnd();
         }
 
         /// <summary>Poll intention mapped onto the current lineup (0 for parties the poll didn't include).</summary>

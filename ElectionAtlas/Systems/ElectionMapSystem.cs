@@ -40,6 +40,14 @@ namespace ElectionAtlas.Systems
             public Vector4 EdgeColor;
         }
 
+        private struct DistrictTriangles
+        {
+            public Entity Entity;
+            public int Start;
+            public int Count;
+            public uint? Color;
+        }
+
         private const float kFillAlpha = 0.5f;
         private const float kEdgeAlpha = 0.95f;
 
@@ -63,8 +71,11 @@ namespace ElectionAtlas.Systems
         private bool m_Disabled;
         private bool m_Visible;
         private ElectionSnapshot m_BuiltFor;
+        private ElectionNightPlayback m_ShownReplay;
+        private int m_ReportFrame;
         private uint m_BuiltSignature; // district chunks' versions at the last build (see GeometrySignature)
         private readonly List<AreaTriangle> m_Scratch = new List<AreaTriangle>();
+        private readonly List<DistrictTriangles> m_Ranges = new List<DistrictTriangles>();
         private readonly Dictionary<Entity, uint> m_Colors = new Dictionary<Entity, uint>();
 
         protected override void OnCreate()
@@ -112,22 +123,32 @@ namespace ElectionAtlas.Systems
             if (!m_Visible)
             {
                 m_BuiltFor = null; // rebuild fresh next time it shows
+                m_ShownReplay = null;
                 return;
             }
 
-            // Change-driven: rebuild for a different election, or when a district was drawn, deleted or reshaped.
+            // Geometry and color have separate lifetimes. A reporting wave only changes existing triangles' colors.
             uint signature = GeometrySignature();
-            bool newElection = election != m_BuiltFor;
-            bool reshaped = signature != m_BuiltSignature;
-            bool rebuild = newElection || reshaped;
+            var replay = m_UI.MapReplay;
+            int frame = replay?.MapFrame ?? int.MaxValue; // a change key only; which districts show is replay.IsRegionShown
+            bool rebuild = m_BuiltFor == null || signature != m_BuiltSignature;
+            bool recolor = election != m_BuiltFor || replay != m_ShownReplay || frame != m_ReportFrame;
 #if DEV_TOOLS
-            DevTick(newElection, reshaped);
+            long started = rebuild || recolor ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
 #endif
-            if (rebuild)
+            if (rebuild || recolor)
             {
                 try
                 {
-                    Rebuild(election);
+                    if (EnsureResources())
+                    {
+                        CollectColors(election, replay);
+                        if (rebuild) BuildGeometry(signature);
+                        else ApplyColors(election != m_BuiltFor || (long)frame - m_ReportFrame > 1);
+                        m_BuiltFor = election;
+                        m_ShownReplay = replay;
+                        m_ReportFrame = frame;
+                    }
                 }
                 catch (Exception e)
                 {
@@ -137,6 +158,9 @@ namespace ElectionAtlas.Systems
                 }
             }
 
+#if DEV_TOOLS
+            DevTick(rebuild, recolor, started);
+#endif
             Draw();
         }
 
@@ -167,23 +191,25 @@ namespace ElectionAtlas.Systems
             }
         }
 
-        private void Rebuild(ElectionSnapshot election)
+        private void CollectColors(ElectionSnapshot election, ElectionNightPlayback replay)
         {
-            // Not ready yet (area data still loading): leave m_BuiltFor unset so the next frame tries again.
-            if (!EnsureResources()) return;
-            m_BuiltFor = election;
-            m_BuiltSignature = GeometrySignature();
-
-            // Winner colors by district entity (ids pack the entity's version and index).
             m_Colors.Clear();
-            foreach (var d in election.Districts)
+            bool revealing = replay != null && replay.Night.Snapshot == election;
+            for (int i = 0; i < election.Districts.Length; i++)
             {
+                var d = election.Districts[i];
                 if (!d.IsSeat || d.Votes <= 0 || d.WinnerIndex < 0) continue;
+                if (revealing && !replay.IsRegionShown(i)) continue;
                 var entity = DistrictKey.ToEntity(d.DistrictId);
                 m_Colors[entity] = d.MapColor;
             }
+        }
 
+        private void BuildGeometry(uint signature)
+        {
+            m_BuiltSignature = signature;
             m_Scratch.Clear();
+            m_Ranges.Clear();
             var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
             var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
 
@@ -200,19 +226,17 @@ namespace ElectionAtlas.Systems
                         ? EntityManager.GetComponentData<AreaGeometryData>(prefab).m_SnapDistance
                         : 0f;
 
-                    Vector4 fill, edge;
-                    if (m_Colors.TryGetValue(entity, out uint rgb))
-                    {
-                        fill = Linear(rgb, kFillAlpha);
-                        edge = Linear(rgb, kEdgeAlpha);
-                    }
-                    else
-                    {
-                        fill = (Vector4)kNoResultFill.linear;
-                        edge = (Vector4)kNoResultEdge.linear;
-                    }
-
+                    int start = m_Scratch.Count;
+                    uint? color = ColorFor(entity);
+                    DistrictColors(color, out var fill, out var edge);
                     AddTriangles(nodes, triangles, snap, fill, edge, ref min, ref max);
+                    m_Ranges.Add(new DistrictTriangles
+                    {
+                        Entity = entity,
+                        Start = start,
+                        Count = m_Scratch.Count - start,
+                        Color = color,
+                    });
                 }
             }
 
@@ -238,6 +262,38 @@ namespace ElectionAtlas.Systems
             var bounds = new Bounds();
             bounds.SetMinMax(min, max);
             m_Bounds = bounds;
+        }
+
+        private uint? ColorFor(Entity entity) => m_Colors.TryGetValue(entity, out uint rgb) ? rgb : (uint?)null;
+
+        private static void DistrictColors(uint? rgb, out Vector4 fill, out Vector4 edge)
+        {
+            fill = rgb.HasValue ? Linear(rgb.Value, kFillAlpha) : (Vector4)kNoResultFill.linear;
+            edge = rgb.HasValue ? Linear(rgb.Value, kEdgeAlpha) : (Vector4)kNoResultEdge.linear;
+        }
+
+        private void ApplyColors(bool uploadAll)
+        {
+            bool changed = false;
+            for (int r = 0; r < m_Ranges.Count; r++)
+            {
+                var range = m_Ranges[r];
+                uint? color = ColorFor(range.Entity);
+                if (range.Color == color) continue;
+                DistrictColors(color, out var fill, out var edge);
+                for (int i = range.Start; i < range.Start + range.Count; i++)
+                {
+                    var triangle = m_Scratch[i];
+                    triangle.FillColor = fill;
+                    triangle.EdgeColor = edge;
+                    m_Scratch[i] = triangle;
+                }
+                if (!uploadAll) m_Triangles.SetData(m_Scratch, range.Start, range.Start, range.Count);
+                changed = true;
+                range.Color = color;
+                m_Ranges[r] = range;
+            }
+            if (uploadAll && changed) m_Triangles.SetData(m_Scratch);
         }
 
         /// <summary>Mirrors AreaBufferSystem.FillMeshDataJob.AddTriangles (same helpers, same padding), with our colors.</summary>
@@ -353,19 +409,27 @@ namespace ElectionAtlas.Systems
 #if DEV_TOOLS
         // Dev counters, logged every few seconds while the map view is open: if the overlay ever flickers again,
         // this shows whether draws stopped or rebuilds churned.
-        private int m_DevDraws, m_DevForElection, m_DevForShape, m_DevFrames;
+        private int m_DevDraws, m_DevRecolors, m_DevGeometryBuilds, m_DevFrames;
+        private double m_DevRecolorMs;
         private float m_DevSince;
 
-        private void DevTick(bool newElection, bool reshaped)
+        private void DevTick(bool rebuilt, bool recolored, long started)
         {
             m_DevFrames++;
-            if (newElection) m_DevForElection++;
-            else if (reshaped) m_DevForShape++;
+            if (rebuilt) m_DevGeometryBuilds++;
+            else if (recolored)
+            {
+                m_DevRecolors++;
+                m_DevRecolorMs += 1000.0 * (System.Diagnostics.Stopwatch.GetTimestamp() - started)
+                    / System.Diagnostics.Stopwatch.Frequency;
+            }
             float now = UnityEngine.Time.realtimeSinceStartup;
             if (m_DevSince == 0f) m_DevSince = now;
             if (now - m_DevSince < 5f) return;
-            Mod.Log.Info($"[dev map] {m_DevFrames} frames, {m_DevDraws} draws, rebuilds: {m_DevForElection} for the election, {m_DevForShape} for district shapes; {m_Count} triangles in {now - m_DevSince:0.0}s");
-            m_DevDraws = m_DevForElection = m_DevForShape = m_DevFrames = 0;
+            Mod.Log.Info($"[dev map] {m_DevFrames} frames, {m_DevDraws} draws, {m_DevGeometryBuilds} geometry builds, " +
+                $"{m_DevRecolors} color refreshes ({m_DevRecolorMs:0.00} ms total); {m_Count} triangles in {now - m_DevSince:0.0}s");
+            m_DevDraws = m_DevGeometryBuilds = m_DevRecolors = m_DevFrames = 0;
+            m_DevRecolorMs = 0;
             m_DevSince = now;
         }
 #endif

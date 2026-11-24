@@ -28,6 +28,9 @@ namespace ElectionAtlas.Model
         public long[] DistrictIds { get; internal set; }
         public float[] DistrictApproval { get; internal set; }
 
+        internal PollRecord WithDistrictIds(DistrictRemap remap) =>
+            new PollRecord(MonthIndex, GoverningPartyId, PartyIds, Approval, Intention, remap.Map(DistrictIds), DistrictApproval);
+
         public static PollRecord From(PollResult poll, int monthIndex, string governingPartyId, IReadOnlyList<DistrictInfo> districts)
         {
             var ids = new long[poll.Districts.Count];

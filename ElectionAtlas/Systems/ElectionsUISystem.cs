@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
+using Colossal.Serialization.Entities;
 using Colossal.UI.Binding;
 using ElectionAtlas.Model;
+using Game;
 using Game.UI;
 
 namespace ElectionAtlas.Systems
@@ -20,6 +22,7 @@ namespace ElectionAtlas.Systems
         private ElectionSystem m_Elections;
 
         private ValueBinding<bool> m_PanelOpen;
+        private ValueBinding<int> m_CitySession;
         private ValueBinding<string> m_GovernmentState;
         // Raw bindings: written straight into the UI with the game's JSON writer, no strings to build or parse.
         private RawValueBinding m_Overview;
@@ -39,12 +42,19 @@ namespace ElectionAtlas.Systems
             m_Elections = World.GetOrCreateSystemManaged<ElectionSystem>();
 
             AddBinding(m_PanelOpen = new ValueBinding<bool>(kGroup, "panelOpen", false));
+            AddBinding(m_CitySession = new ValueBinding<int>(kGroup, "citySession", 0));
             AddBinding(m_GovernmentState = new ValueBinding<string>(kGroup, "governmentState", nameof(GovernmentState.NoCityHall)));
             AddBinding(m_Overview = new RawValueBinding(kGroup, "overview", Guarded("overview", WriteOverview)));
             AddBinding(m_Districts = new RawValueBinding(kGroup, "districts", Guarded("districts", WriteDistricts)));
             AddBinding(m_History = new RawValueBinding(kGroup, "history", Guarded("history", WriteHistory)));
             AddBinding(m_Polls = new RawValueBinding(kGroup, "polls", Guarded("polls", WritePolls)));
             BindPartyEditor();
+            BindReplay();
+            BindLiveElection();
+#if !DEV_TOOLS
+            AddBinding(new ValueBinding<bool>(kGroup, "devTools", false));
+            AddBinding(new ValueBinding<string>(kGroup, "devStatus", ""));
+#endif
 
             AddBinding(new TriggerBinding(kGroup, "togglePanel", TogglePanel));
             AddBinding(new TriggerBinding(kGroup, "closePanel", ClosePanel));
@@ -57,9 +67,33 @@ namespace ElectionAtlas.Systems
             Mod.Log.Info("Elections UI bindings registered");
         }
 
+        protected override void OnDestroy()
+        {
+            UnbindLiveElection();
+            base.OnDestroy();
+        }
+
+        protected override void OnGamePreload(Purpose purpose, GameMode mode)
+        {
+            base.OnGamePreload(purpose, mode);
+            ClosePanel();
+            EndReplay(); // a live Election Day survives closing the panel, but not leaving the city
+            ClearElectionNotice();
+#if DEV_TOOLS
+            ResetDevClock();
+#endif
+            m_ElectionIndex = -1;
+            Invalidate();
+            m_CitySession.Update(m_CitySession.value + 1);
+        }
+
         protected override void OnUpdate()
         {
             base.OnUpdate();
+            if (!m_Elections.HasLoadedCity) return;
+#if DEV_TOOLS
+            if (m_NoticeSnapshot != null && !IsArchived(m_NoticeSnapshot)) ClearElectionNotice(); // after a dev Reset
+#endif
 
             // Only touch the binding when the state changes (Enum.ToString allocates).
             var state = m_CityHall.State;
@@ -69,28 +103,40 @@ namespace ElectionAtlas.Systems
                 m_GovernmentState.Update(state.ToString());
             }
 
-            if (m_CityHall.PendingUnlockNotice)
+            var resultNotice = m_Elections.PendingResultNotice;
+            bool opening = m_CityHall.PendingUnlockNotice || resultNotice != ElectionSystem.ResultNotice.None;
+            m_CityHall.PendingUnlockNotice = false;
+            if (resultNotice != ElectionSystem.ResultNotice.None)
             {
-                m_CityHall.PendingUnlockNotice = false;
-                m_PanelOpen.Update(true);
-            }
-
-            if (m_Elections.PendingResultNotice)
-            {
-                m_Elections.PendingResultNotice = false;
+                m_Elections.PendingResultNotice = ElectionSystem.ResultNotice.None;
                 m_ElectionIndex = -1;
+                EndReplay();
+                ClearElectionNotice();
+                var archive = m_Elections.Ledger.Archive;
+                if (Mod.Settings?.ResultReveal == ResultReveal.ElectionDay)
+                {
+                    WatchElectionDay(archive.Count - 1,
+                        resultNotice == ElectionSystem.ResultNotice.Scheduled && Mod.Settings.ElectionDayPace == ElectionDayPace.CityClock);
+                    BeginLiveElection();
+                }
+                else ShowElectionNotice(archive.Latest, results: true);
                 Invalidate();
-                m_PanelOpen.Update(true);
             }
 
-            if (!m_PanelOpen.value)
-                return;
+            // The live election and any city-clock day keep playing while the panel is closed.
+            UpdateReplay();
+            if (!m_PanelOpen.value && !opening) return;
+            RefreshPanel();
+            if (opening) m_PanelOpen.Update(true);
+        }
 
+        private void RefreshPanel()
+        {
             RefreshPartyEditor();
 
             // Rebuild only when something shown has changed.
             long key = m_Elections.DataVersion;
-            key = key * 31 + (int)state;
+            key = key * 31 + (int)m_CityHall.State;
             key = key * 31 + (int)(m_CityHall.Efficiency * 100f);
             key = key * 31 + (m_CityHall.IsShutDown ? 1 : 0) + (m_CityHall.SwitchedOff ? 2 : 0);
             key = key * 31 + m_CityHall.CityHallCount;
@@ -108,16 +154,17 @@ namespace ElectionAtlas.Systems
 
         private void Invalidate() => m_LastKey = long.MinValue;
 
-        public bool PanelOpen => m_PanelOpen.value;
+        public bool PanelOpen => m_Elections.HasLoadedCity && m_PanelOpen.value;
 
         /// <summary>The panel is collapsed to the map legend and districts are colored by result.</summary>
-        public bool MapView => m_PanelOpen.value && m_MapView.value;
+        public bool MapView => PanelOpen && m_MapView.value;
 
         /// <summary>The election the Districts tab is showing (the latest unless the player stepped back).</summary>
         public ElectionSnapshot ShownElection
         {
             get
             {
+                if (!m_Elections.HasLoadedCity) return null;
                 var archive = m_Elections.Ledger.Archive;
                 if (archive.Count == 0) return null;
                 return m_ElectionIndex < 0 || m_ElectionIndex >= archive.Count ? archive.Latest : archive[m_ElectionIndex];
@@ -127,16 +174,32 @@ namespace ElectionAtlas.Systems
 
         private void TogglePanel()
         {
-            if (m_PanelOpen.value) ClosePanel();
-            else m_PanelOpen.Update(true);
+            if (!m_Elections.HasLoadedCity) return;
+            if (m_PanelOpen.value)
+            {
+                ClosePanel();
+                return;
+            }
+
+            OpenPanel();
+        }
+
+        private void OpenPanel()
+        {
             Invalidate();
+            RefreshPanel();
+            m_PanelOpen.Update(true);
         }
 
         /// <summary>Closing the panel (or the map legend) also ends the map view, so the overlay goes with it.</summary>
         private void ClosePanel()
         {
+            // The live election's finished count has been on screen, so its button goes.
+            if (m_PanelOpen.value && m_LiveElection != null && m_Replay.IsFinished) EndLiveElection();
             m_PanelOpen.Update(false);
             m_MapView.Update(false);
+            // With notifications on, the live election keeps playing for its button and notices.
+            if (m_LiveElection == null || !m_NotificationsOn) EndTimedReplay();
         }
 
         private void StepElection(int delta)
@@ -151,10 +214,13 @@ namespace ElectionAtlas.Systems
         {
             int count = m_Elections.Ledger.Archive.Count;
             if (count == 0) return;
-            index = Math.Max(0, Math.Min(count - 1, index));
-            m_ElectionIndex = index == count - 1 ? -1 : index;
+            EndTimedReplay();
+            SelectElection(Math.Max(0, Math.Min(count - 1, index)), count);
             Invalidate();
         }
+
+        /// <summary>The Districts tab follows the latest election (-1) unless the player picked an earlier one.</summary>
+        private void SelectElection(int index, int count) => m_ElectionIndex = index == count - 1 ? -1 : index;
 
         // ---------------------------------------------------------------- bindings (shapes in UiWriters)
 
@@ -176,7 +242,9 @@ namespace ElectionAtlas.Systems
             var governing = parties.FirstOrDefault(p => p.Id == ledger.GoverningPartyId);
             var poll = ledger.Polls.Latest;
 
-            w.TypeBegin("ElectionAtlas.Overview");
+            w.TypeBegin("ElectionAtlas.CityOverview");
+            w.Prop("cityName", m_Elections.CityName);
+            w.Prop("loadedSaveName", m_Elections.LoadedSaveName);
             w.Prop("state", m_CityHall.State.ToString());
             w.Prop("today", now);
             w.Prop("cityHalls", m_CityHall.CityHallCount);
@@ -187,7 +255,7 @@ namespace ElectionAtlas.Systems
             w.Prop("nextElection", ledger.NextElectionMonth == ElectionSchedule.NotScheduled ? -1 : ledger.NextElectionMonth);
             w.Prop("monthsUntil", ElectionSchedule.MonthsUntil(now, ledger.NextElectionMonth));
             w.Prop("elections", ledger.Archive.Count);
-            w.Prop("reading", m_Elections.IsReading);
+            w.Prop("reading", m_Elections.IsCountingElection);
             w.Prop("devMonthOffset", m_Elections.DevMonthOffset);
 
             w.PropertyName("governing");

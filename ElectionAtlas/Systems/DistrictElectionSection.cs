@@ -14,6 +14,7 @@ namespace ElectionAtlas.Systems
     public partial class DistrictElectionSection : InfoSectionBase
     {
         private ElectionSystem m_Elections;
+        private ElectionsUISystem m_ElectionUI;
         private DistrictView m_View;
         private ElectionSnapshot m_Election;
         private string m_GoverningName;
@@ -25,8 +26,13 @@ namespace ElectionAtlas.Systems
         {
             base.OnCreate();
             m_Elections = World.GetOrCreateSystemManaged<ElectionSystem>();
+            m_ElectionUI = World.GetOrCreateSystemManaged<ElectionsUISystem>();
             m_InfoUISystem.AddMiddleSection(this);
         }
+
+        /// <summary>Called when a replay starts or ends: the section's visibility depends on it, and the info panel
+        /// only re-reads a section that asks.</summary>
+        internal void RefreshForReplay() => RequestUpdate();
 
         protected override void Reset()
         {
@@ -40,6 +46,7 @@ namespace ElectionAtlas.Systems
         {
             base.OnUpdate();
             visible = selectedEntity != Unity.Entities.Entity.Null
+                && !m_ElectionUI.ReplayActive
                 && EntityManager.HasComponent<District>(selectedEntity)
                 && (m_Elections.Ledger.Archive.Count > 0 || m_Elections.Ledger.Polls.Count > 0);
         }

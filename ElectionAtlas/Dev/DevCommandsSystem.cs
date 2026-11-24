@@ -3,10 +3,12 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Colossal.Serialization.Entities;
 using Colossal.UI.Binding;
 using ElectionAtlas.Diagnostics;
 using ElectionAtlas.Model;
 using ElectionAtlas.Systems;
+using Game;
 using Game.Simulation;
 using Game.UI;
 using UnityEngine;
@@ -25,6 +27,7 @@ namespace ElectionAtlas.Dev
 
         private CityHallSystem m_CityHall;
         private ElectionSystem m_Elections;
+        private ElectionsUISystem m_ElectionUI;
         private TimeSystem m_TimeSystem;
         private VoterReader m_Reader; // its own instance: never the one the census is using
 
@@ -35,6 +38,7 @@ namespace ElectionAtlas.Dev
             base.OnCreate();
             m_CityHall = World.GetOrCreateSystemManaged<CityHallSystem>();
             m_Elections = World.GetOrCreateSystemManaged<ElectionSystem>();
+            m_ElectionUI = World.GetOrCreateSystemManaged<ElectionsUISystem>();
             m_TimeSystem = World.GetOrCreateSystemManaged<TimeSystem>();
             m_Reader = new VoterReader(this);
 
@@ -50,8 +54,27 @@ namespace ElectionAtlas.Dev
             AddBinding(new TriggerBinding(kGroup, "devExportCity", () => Run("export city", ExportCity)));
             AddBinding(new TriggerBinding(kGroup, "devBenchmark", () => Run("benchmark readers", BenchmarkReaders)));
             AddBinding(new TriggerBinding<string>(kGroup, "devSetGovernment", s => Run("set government", () => SetGovernment(s))));
+            AddBinding(new TriggerBinding(kGroup, "devWatchLatest", () => Run("watch latest election", m_ElectionUI.DevWatchLatest)));
+            AddBinding(new TriggerBinding(kGroup, "devWatchCityClock", () => Run("watch by city clock", m_ElectionUI.DevWatchCityClock)));
+            AddBinding(new TriggerBinding(kGroup, "devNoticePollsClosed", () => Run("preview polls-closed notice", () => m_ElectionUI.DevShowElectionNotice(false))));
+            AddBinding(new TriggerBinding(kGroup, "devNoticeResults", () => Run("preview results notice", () => m_ElectionUI.DevShowElectionNotice(true))));
+            AddBinding(new TriggerBinding<string>(kGroup, "devWatchSample", s => Run("watch sample election", () => m_ElectionUI.DevWatchSample(s))));
+            AddBinding(new TriggerBinding(kGroup, "devDayStep", () => Run("step Election Day", m_ElectionUI.DevStepReplay)));
+            AddBinding(new TriggerBinding<string>(kGroup, "devDayPace", p => Run("set Election Day pace", () => m_ElectionUI.DevReplayPace(p))));
+            AddBinding(new TriggerBinding(kGroup, "devDaySingle", () => Run("set wave size", () => m_ElectionUI.DevReplayWave(1))));
+            AddBinding(new TriggerBinding(kGroup, "devDayWaves", () => Run("set wave size", () => m_ElectionUI.DevReplayWave(3))));
+            AddBinding(new TriggerBinding(kGroup, "devDayAutoWaves", () => Run("set wave size", () => m_ElectionUI.DevReplayWave(0))));
+            // The argument is minutes after midnight, for example "1135" for 18:55.
+            AddBinding(new TriggerBinding<string>(kGroup, "devDayClock", m => Run("jump the Election Day clock",
+                () => m_ElectionUI.DevJumpClock(int.Parse(m, System.Globalization.CultureInfo.InvariantCulture) / 60.0))));
 
             Mod.Log.Info("[dev] developer commands registered");
+        }
+
+        protected override void OnGamePreload(Purpose purpose, GameMode mode)
+        {
+            base.OnGamePreload(purpose, mode);
+            m_Status.Update("Developer tools ready.");
         }
 
         // ---------------------------------------------------------------- commands
@@ -139,6 +162,12 @@ namespace ElectionAtlas.Dev
 
         private void Run(string name, Func<string> command)
         {
+            if (!m_Elections.HasLoadedCity)
+            {
+                m_Status.Update("Load a city first.");
+                return;
+            }
+
             try
             {
                 m_Status.Update(command());

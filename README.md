@@ -4,6 +4,8 @@ Election results for every district of your city, as exact numbers and as maps. 
 
 > **First release in testing.** Elections, polls, and the district map have run in game. See the combined [release checklist](TESTING.md).
 
+See the [release roadmap](ROADMAP.md) for Election Day, precincts, and later policy features.
+
 ## Status
 
 - The monthly census reads households in worker-thread slices during the last quarter of each month. Elections and polls use the census at the month boundary. A City Hall shutdown reduces government approval and support.
@@ -150,10 +152,14 @@ dotnet run --project ElectionAtlas.Lab -- "$env:USERPROFILE\AppData\LocalLow\Col
 
 A folder argument uses its newest CSV. `--preset`, `--rule`, `--incumbent` and `--seed` change the run, and `--sample <file>` writes a synthetic city if you don't have one yet. Copy exported CSVs into `ElectionAtlas.Model.Tests\Cities\` and `dotnet test` replays them too.
 
+Run `dotnet run --project ElectionAtlas.Lab -- --day-samples` to see voting hours and district returns for the built-in elections. Add `--day` to a city CSV run to preview its turnout and count.
+
+Add `--demographics` to inspect the voter mix by district. Use `--lean-weights FILE` to compare party shares with the same roster, turnout preset, incumbent, and seed. The file takes one `LeanWeights` field per line, such as `OfficeSocial=-0.2`. If you also pass `--profiles`, each experiment compares against the same defaults.
+
 ## Notes
 
 - `UI/types/cs2.d.ts` is a minimal hand-written shim for `cs2/modding`, `cs2/api` and `cs2/ui`, with prop names checked against the game's UI bundle (game 1.6.4). Swap it for the toolchain's typings once installed.
-- `PublishConfiguration.xml` points at `Properties/Thumbnail.png`, which doesn't exist yet. Add one before the first publish.
+- `PublishConfiguration.xml` uses the [publish thumbnail](ElectionAtlas/Properties/Thumbnail.png).
 - Performance rule for every later phase: no per-frame work, no components added to citizens, and Burst jobs that only read game data. Targets: about 0 ms per frame between polls, under 100 ms per election (spread over frames), under 100 KB added to a save.
 
 ## License

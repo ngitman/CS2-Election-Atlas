@@ -14,6 +14,7 @@
 .ea-small { font-size: 12rem; }
 .ea-bold { font-weight: bold; }
 .ea-nowrap { white-space: nowrap; }
+.ea-city-context { margin-bottom: 8rem; }
 
 /* ---------- government strip ---------- */
 
@@ -82,9 +83,11 @@
 
 .ea-stack { display: flex; height: 14rem; border-radius: 7rem; overflow: hidden; margin: 6rem 0; }
 .ea-legend { display: flex; flex-wrap: wrap; }
-.ea-legend__item { display: flex; flex-direction: column; margin: 0 18rem 6rem 0; white-space: nowrap; }
+.ea-legend__item { display: flex; flex-direction: column; box-sizing: border-box; padding-right: 12rem; overflow: hidden; white-space: nowrap; }
 .ea-legend__line { display: flex; align-items: center; }
-.ea-legend__votes { margin-left: 14rem; }
+.ea-legend__name { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ea-legend__share { flex-shrink: 0; margin-left: 6rem; }
+.ea-legend__votes { margin-left: 16rem; }
 
 /* ---------- rows and bars ---------- */
 
@@ -116,6 +119,29 @@
 .ea-card--active:hover { border-color: rgba(255, 255, 255, 0.6); }
 .ea-card__head { display: flex; justify-content: space-between; margin-bottom: 4rem; }
 
+.ea-day__title { font-size: 21rem; font-weight: bold; line-height: 25rem; margin: 4rem 0; white-space: nowrap; }
+.ea-day__watch { margin-left: 6rem; }
+.ea-day__line { display: flex; align-items: center; height: 20rem; min-height: 20rem; }
+.ea-day__line .ea-ellipsis { flex: 1; min-width: 0; }
+.ea-day__details { display: flex; flex-direction: column; height: 174rem; }
+.ea-day__district-scroll { height: 174rem; }
+.ea-day__party-scroll { height: 101rem; }
+.ea-day__details .ea-stack { height: 7rem; margin: 3rem 0; }
+.ea-day__votes, .ea-day__share, .ea-day__seats {
+  flex-shrink: 0; white-space: nowrap; text-align: right;
+}
+.ea-day__votes { width: 66rem; }
+.ea-day__share { width: 50rem; }
+.ea-day__seats { width: 34rem; }
+.ea-day__lead-change {
+  flex-shrink: 0; margin-left: auto; padding: 1rem 6rem; border-radius: 3rem;
+  background: rgba(255, 200, 80, 0.22); color: #ffd27a; font-weight: normal; white-space: nowrap;
+}
+.ea-day__controls { display: flex; flex-wrap: wrap; margin-top: 8rem; }
+.ea-day__control { width: 25%; box-sizing: border-box; height: 30rem; padding-right: 5rem; }
+.ea-day--map .ea-day__control { width: 50%; }
+.ea-day__control .ea-btn { margin: 0; padding: 4rem; font-size: 12rem; text-align: center; }
+
 /* ---------- polls ---------- */
 
 .ea-spark { display: flex; align-items: flex-end; height: 56rem; margin: 6rem 0 2rem 0; }
@@ -142,6 +168,75 @@
 .ea-btn--primary { background-color: #2f7bd8; }
 .ea-btn--primary:hover { background-color: #3f8ce8; }
 .ea-btn--on { background-color: rgba(125, 180, 255, 0.35); }
+
+/* ---------- live election button and notices ---------- */
+
+/* The game's right-hand column (notifications, Chirper) is a narrow stack anchored bottom right, and this item
+   sits on top of it. The status badge and the notices extend to its left, as the game's chirps do. */
+.ea-live { position: relative; width: var(--toolbarToggleButtonSize, 32rem); pointer-events: none; }
+.ea-live--button { height: var(--toolbarToggleButtonSize, 32rem); margin-bottom: 10rem; }
+.ea-live__item {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: rgba(23, 31, 43, 0.94);
+  pointer-events: auto;
+}
+.ea-live__item:hover { background-color: rgba(38, 50, 68, 0.96); }
+.ea-live__item--on, .ea-live__item--on:hover { background-color: #2f7bd8; }
+.ea-live__glyph {
+  width: 60%;
+  height: 60%;
+  background-color: rgba(255, 255, 255, 0.92);
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+}
+.ea-live__side {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 400rem;
+  margin-right: 8rem;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  pointer-events: none;
+}
+.ea-live__badge {
+  display: flex;
+  align-items: center;
+  padding: 5rem 12rem;
+  border-radius: 14rem;
+  background-color: rgba(23, 31, 43, 0.94);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13rem;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.ea-live__badge:hover { background-color: rgba(38, 50, 68, 0.96); }
+
+.ea-notice {
+  position: absolute;
+  right: 100%;
+  bottom: 0;
+  margin-right: 8rem;
+  width: 320rem;
+  box-sizing: border-box;
+  padding: 12rem 14rem;
+  border-radius: 9rem;
+  border-left: 3rem solid #7db4ff;
+  background-color: rgba(23, 31, 43, 0.97);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 14rem;
+  pointer-events: auto;
+}
+.ea-notice__actions { display: flex; margin-top: 10rem; }
+.ea-notice__actions .ea-btn { margin-bottom: 0; }
 
 /* ---------- party editor ---------- */
 
@@ -198,6 +293,15 @@
 .ea-dev { margin-top: 16rem; padding-top: 10rem; border-top: 1rem solid rgba(255, 255, 255, 0.12); }
 .ea-dev__toggle { display: flex; justify-content: space-between; color: rgba(255, 255, 255, 0.62); }
 .ea-dev__toggle:hover { color: #ffffff; }
+.ea-dev__group { margin: 10rem 0 4rem 0; font-size: 11rem; text-transform: uppercase; letter-spacing: 0.5rem; color: rgba(255, 255, 255, 0.45); }
+.ea-dev__grid { display: flex; flex-wrap: wrap; }
+.ea-dev__cell { width: 25%; height: 34rem; box-sizing: border-box; padding: 0 6rem 6rem 0; }
+.ea-dev__grid--wide .ea-dev__cell { width: 50%; }
+.ea-dev__cell .ea-btn {
+  height: 100%; box-sizing: border-box; margin: 0; padding: 0 6rem;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12rem; overflow: hidden; text-overflow: ellipsis;
+}
 .ea-dev__status { margin-top: 6rem; padding: 8rem 10rem; border-radius: 7rem; font-size: 12rem; background-color: rgba(0, 0, 0, 0.25); }
 
 .ea-empty { padding: 24rem 12rem; text-align: center; color: rgba(255, 255, 255, 0.62); }

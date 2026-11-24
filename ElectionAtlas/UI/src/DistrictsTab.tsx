@@ -29,6 +29,11 @@ export const DistrictsTab = ({ d, onOpen, openId }: { d: Districts | null; onOpe
         <div className="ea-btn ea-btn--primary ea-btn--slim" onClick={() => trigger(GROUP, "showMap")}>
           View on map
         </div>
+        {d.index !== undefined ? (
+          <div className="ea-btn ea-btn--slim ea-day__watch" onClick={() => trigger(GROUP, "watchElectionDay", d.index)}>
+            Watch Election Day
+          </div>
+        ) : null}
       </div>
 
       <DistrictTable

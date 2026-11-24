@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using Colossal.Serialization.Entities;
 using ElectionAtlas.Model;
 using Game;
+using Unity.Collections;
+using Entity = Unity.Entities.Entity;
 
 namespace ElectionAtlas.Systems
 {
@@ -16,6 +18,13 @@ namespace ElectionAtlas.Systems
     /// misread, and a block that fails to read starts the city fresh instead of breaking the load.
     /// Size: only the last <see cref="kDetailedPolls"/> polls keep per-district approval (all the UI shows);
     /// older polls keep their citywide numbers.
+    ///
+    /// District ids pack the district entity (<see cref="DistrictKey"/>), and the game renumbers entities on load.
+    /// So v3 writes a district table first: each live district as an entity reference plus its id at save time.
+    /// The game turns entity references into the loaded entities (Colossal.Core BinaryWriter.Write(Entity) writes
+    /// the entity's index in the save, BinaryReader.Read(out Entity) looks it up in the table of entities the load
+    /// just created; NameSystem saves its custom names the same way), and every id read is mapped through it.
+    /// v1/v2 saves have no table; ElectionSystem matches their districts by name once the city has loaded.
     /// </summary>
     public partial class ElectionStoreSystem : GameSystemBase, IDefaultSerializable, ISerializable
     {
@@ -38,18 +47,33 @@ namespace ElectionAtlas.Systems
 
         public void SetDefaults(Context context)
         {
-            m_Elections.RestoreFromSave(null);
+            m_Elections.RestoreFromSave(context, null, 0, null);
         }
 
         public void Serialize<TWriter>(TWriter writer) where TWriter : IWriter
         {
-            bool include = Mod.Settings?.SaveElectionData ?? true;
+            bool citySave = writer.context.purpose == Purpose.SaveGame;
+            bool include = citySave && m_Elections.HasLoadedCity && (Mod.Settings?.SaveElectionData ?? true);
             writer.Write(ElectionLedger.CurrentVersion);
             writer.Write(include);
             if (!include)
             {
-                Mod.Log.Info("Election data not saved (Options > Election Atlas > Saving is off)");
+                if (citySave)
+                    Mod.Log.Info(m_Elections.HasLoadedCity
+                        ? "Election data not saved (Options > Election Atlas > Saving is off)"
+                        : "Election data not saved (no loaded city)");
                 return;
+            }
+
+            // v3: the district table (see the class summary).
+            using (var districts = m_Elections.DistrictEntities(Allocator.Temp))
+            {
+                writer.Write(districts.Length);
+                foreach (var district in districts)
+                {
+                    writer.Write(district);
+                    WriteLong(writer, DistrictKey.Of(district));
+                }
             }
 
             var l = m_Elections.LedgerForSave();
@@ -116,25 +140,29 @@ namespace ElectionAtlas.Systems
                 }
             }
 
-            Mod.Log.Info($"Election data saved: {l.State}, {l.Archive.Count} election(s), {l.Polls.Count} poll(s)");
+            Mod.Log.Info($"Election data saved: {l.State}, {l.Archive.Count} election(s), {l.Polls.Count} poll(s); city '{m_Elections.CityName}'");
         }
 
         public void Deserialize<TReader>(TReader reader) where TReader : IReader
         {
             try
             {
-                m_Elections.RestoreFromSave(Read(reader));
+                var ledger = Read(reader, out int version, out var remap);
+                m_Elections.RestoreFromSave(reader.context, ledger, version, remap);
             }
             catch (Exception e)
             {
                 Mod.Log.Error(e, "Election data in this save couldn't be read; the city starts with no election history");
-                m_Elections.RestoreFromSave(null);
+                m_Elections.RestoreFromSave(reader.context, null, 0, null);
             }
         }
 
-        private static ElectionLedger Read<TReader>(TReader reader) where TReader : IReader
+        /// <param name="remap">v3+: the saved ids mapped to the loaded districts, already applied to the ledger.
+        /// Null for older formats, whose ids are still the ones they were saved with.</param>
+        private static ElectionLedger Read<TReader>(TReader reader, out int version, out DistrictRemap remap) where TReader : IReader
         {
-            reader.Read(out int version);
+            remap = null;
+            reader.Read(out version);
             if (version < 1 || version > ElectionLedger.CurrentVersion)
             {
                 Mod.Log.Warn($"Election data has format version {version}; this build reads up to {ElectionLedger.CurrentVersion}. Starting fresh.");
@@ -145,6 +173,8 @@ namespace ElectionAtlas.Systems
                 reader.Read(out bool included);
                 if (!included) return null;
             }
+            if (version >= 3)
+                remap = ReadDistrictTable(reader);
 
             var l = new ElectionLedger();
             reader.Read(out int state); l.State = (GovernmentState)state;
@@ -185,6 +215,7 @@ namespace ElectionAtlas.Systems
                 for (int d = 0; d < districtCount; d++)
                 {
                     long districtId = ReadLong(reader);
+                    if (remap != null) districtId = remap.Map(districtId);
                     string name = ReadString(reader);
                     long eligible = ReadLong(reader);
                     reader.Read(out int winner);
@@ -225,7 +256,8 @@ namespace ElectionAtlas.Systems
                     districtApproval = new float[n];
                     for (int k = 0; k < n; k++)
                     {
-                        districtIds[k] = ReadLong(reader);
+                        long districtId = ReadLong(reader);
+                        districtIds[k] = remap != null ? remap.Map(districtId) : districtId;
                         reader.Read(out districtApproval[k]);
                     }
                 }
@@ -233,8 +265,24 @@ namespace ElectionAtlas.Systems
                 l.Polls.Add(new PollRecord(monthIndex, governingId, ids, approval, intention, districtIds, districtApproval));
             }
 
-            Mod.Log.Info($"Election data read: {l.State}, {l.Archive.Count} election(s), {l.Polls.Count} poll(s)");
+            Mod.Log.Info($"Election data read (format v{version}): {l.State}, {l.Archive.Count} election(s), {l.Polls.Count} poll(s)");
             return l;
+        }
+
+        /// <summary>Saved district id -> the loaded district's id. Entities that didn't load come back null and are skipped.</summary>
+        private static DistrictRemap ReadDistrictTable<TReader>(TReader reader) where TReader : IReader
+        {
+            reader.Read(out int count);
+            Check(count, kMaxDistricts, "saved districts");
+            var known = new Dictionary<long, long>(count);
+            for (int i = 0; i < count; i++)
+            {
+                reader.Read(out Entity district);
+                long savedId = ReadLong(reader);
+                if (district != Entity.Null && !known.ContainsKey(savedId)) known[savedId] = DistrictKey.Of(district);
+            }
+
+            return new DistrictRemap(known);
         }
 
         private static void Check(int count, int max, string what)

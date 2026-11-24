@@ -23,8 +23,11 @@ namespace ElectionAtlas
         public const string kSaveGroup = "Saving";
         public const string kDebugGroup = "Debug";
 
+        // The game never calls SetDefaults on its own (neither ModSetting nor Setting does in its constructor), so a
+        // value missing from the settings file would otherwise stay at the C# default (false, or an enum's first value).
         public Setting(IMod mod) : base(mod)
         {
+            SetDefaults();
         }
 
         [SettingsUISection(kSection, kScheduleGroup)]
@@ -32,6 +35,15 @@ namespace ElectionAtlas
 
         [SettingsUISection(kSection, kScheduleGroup)]
         public bool PauseWithoutCityHall { get; set; }
+
+        [SettingsUISection(kSection, kScheduleGroup)]
+        public ResultReveal ResultReveal { get; set; }
+
+        [SettingsUISection(kSection, kScheduleGroup)]
+        public ElectionDayPace ElectionDayPace { get; set; }
+
+        [SettingsUISection(kSection, kScheduleGroup)]
+        public bool ElectionNotifications { get; set; }
 
         [SettingsUISection(kSection, kRulesGroup)]
         public GoverningRule GoverningRule { get; set; }
@@ -88,6 +100,9 @@ namespace ElectionAtlas
         {
             Cadence = ElectionCadence.EveryYear;
             PauseWithoutCityHall = true;
+            ResultReveal = ResultReveal.ElectionDay;
+            ElectionDayPace = ElectionDayPace.CityClock;
+            ElectionNotifications = true;
             GoverningRule = GoverningRule.PopularVote;
             TurnoutPreset = TurnoutPreset.UsGeneral;
             PartyLineup = PartyLineup.TwoParties;

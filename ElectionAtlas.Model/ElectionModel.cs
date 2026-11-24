@@ -65,34 +65,30 @@ namespace ElectionAtlas.Model
             for (int d = 0; d < districtCount; d++)
             {
                 var partyVotes = new long[partyCount];
-                long total = 0;
                 for (int p = 0; p < partyCount; p++)
                 {
                     long v = (long)Math.Round(votes[d * partyCount + p], MidpointRounding.AwayFromZero);
                     partyVotes[p] = v;
-                    total += v;
                     cityVotes[p] += v;
                 }
 
-                int winner = TopIndex(partyVotes, out int runnerUp);
+                var tally = RegionTally.From(partyVotes, eligible[d]);
                 // Residents outside every district vote in the city total, but that bucket is not a seat.
-                if (winner >= 0 && d != outsideDistrict) districtsWon[winner]++;
+                if (tally.HasWinner && d != outsideDistrict) districtsWon[tally.WinnerIndex]++;
 
                 districts[d] = new DistrictResult
                 {
                     District = d,
-                    Eligible = eligible[d],
-                    Votes = total,
-                    Turnout = eligible[d] > 0 ? (float)((double)total / eligible[d]) : 0f,
+                    Eligible = tally.Eligible,
+                    Votes = tally.Votes,
+                    Turnout = tally.Turnout,
                     PartyVotes = partyVotes,
-                    WinnerIndex = winner,
-                    Margin = winner >= 0 && total > 0
-                        ? (float)((double)(partyVotes[winner] - (runnerUp >= 0 ? partyVotes[runnerUp] : 0)) / total)
-                        : 0f,
+                    WinnerIndex = tally.WinnerIndex,
+                    Margin = tally.Margin,
                 };
 
-                cityTotal += total;
-                cityEligible += eligible[d];
+                cityTotal += tally.Votes;
+                cityEligible += tally.Eligible;
             }
 
             var cityShares = new float[partyCount];
@@ -217,9 +213,20 @@ namespace ElectionAtlas.Model
             return Clamp(avgHappiness + cfg.ApprovalAlignmentPoints * alignment, 0f, 100f);
         }
 
-        private static int PickGoverningParty(GoverningRule rule, long[] cityVotes, int[] districtsWon)
+        /// <summary>
+        /// Who governs given citywide votes and districts won (seats only, never the outside bucket): the popular-vote
+        /// leader, or under <see cref="GoverningRule.MostDistricts"/> the party with the most districts, a tie going to
+        /// the one with more votes and then to the lower index. Nobody has a district yet: the popular-vote leader.
+        /// -1 when nobody voted. Election Night uses it for the provisional leader of a partial count.
+        /// </summary>
+        public static int PickGoverningParty(GoverningRule rule, long[] cityVotes, int[] districtsWon)
         {
-            int popular = TopIndex(cityVotes, out _);
+            if (cityVotes == null) throw new ArgumentNullException(nameof(cityVotes));
+            if (districtsWon == null) throw new ArgumentNullException(nameof(districtsWon));
+            if (districtsWon.Length != cityVotes.Length)
+                throw new ArgumentException("Need one district count per party.", nameof(districtsWon));
+
+            int popular = RegionTally.From(cityVotes, 0).WinnerIndex;
             if (rule == GoverningRule.PopularVote || popular < 0)
                 return popular;
 
@@ -233,28 +240,6 @@ namespace ElectionAtlas.Model
             }
 
             return best >= 0 ? best : popular;
-        }
-
-        /// <summary>Index of the largest value (lowest index wins ties); -1 when every value is 0.</summary>
-        private static int TopIndex(long[] values, out int runnerUp)
-        {
-            int top = -1;
-            runnerUp = -1;
-            for (int i = 0; i < values.Length; i++)
-            {
-                if (values[i] <= 0) continue;
-                if (top < 0 || values[i] > values[top])
-                {
-                    runnerUp = top;
-                    top = i;
-                }
-                else if (runnerUp < 0 || values[i] > values[runnerUp])
-                {
-                    runnerUp = i;
-                }
-            }
-
-            return top;
         }
 
         private static void ValidateInputs(GroupTable table, IReadOnlyList<Party> parties, ModelConfig cfg)

@@ -8,7 +8,10 @@ export const monthLabel = (index: number | undefined | null): string => {
   return `${MONTHS[month]} ${year}`;
 };
 
-export const pct = (v: number | undefined | null, digits = 1): string =>
+/** An hour of the day as "07:00". */
+export const clock = (hour: number): string => `${hour < 10 ? "0" : ""}${hour}:00`;
+
+export const pct =(v: number | undefined | null, digits = 1): string =>
   v === undefined || v === null || isNaN(v) ? "-" : `${(v * 100).toFixed(digits)}%`;
 
 export const points = (margin: number): string => `${(margin * 100).toFixed(1)} pts`;

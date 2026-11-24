@@ -2,10 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using Colossal;
+using Colossal.IO.AssetDatabase;
+using Colossal.Serialization.Entities;
 using ElectionAtlas.Model;
 using Game;
+using Game.Assets;
+using Game.City;
 using Game.Simulation;
-using Purpose = Colossal.Serialization.Entities.Purpose;
+using Unity.Collections;
+using Deleted = Game.Common.Deleted;
+using District = Game.Areas.District;
+using Entity = Unity.Entities.Entity;
+using Temp = Game.Tools.Temp;
+using TimeData = Game.Common.TimeData;
 
 namespace ElectionAtlas.Systems
 {
@@ -23,19 +33,27 @@ namespace ElectionAtlas.Systems
     /// </summary>
     public partial class ElectionSystem : GameSystemBase
     {
+        internal enum ResultNotice { None, Immediate, Scheduled }
+
         private const int kIdleInterval = 512;
         private const int kReadInterval = 16;
         private const int kSliceHouseholds = 1024;  // about 0.2 ms of worker time per slice
         private const float kCensusStart = 0.75f;  // census starts once the month is this far along
 
         private CityHallSystem m_CityHall;
+        private CityConfigurationSystem m_CityConfiguration;
         private TimeSystem m_Time;
+        private SimulationSystem m_Simulation;
+        private Unity.Entities.EntityQuery m_TimeDataQuery;
         private VoterReader m_Reader;
         private readonly ModelConfig m_Config = new ModelConfig();
         private readonly ProfileConfig m_ProfileConfig = new ProfileConfig();
         private readonly Dictionary<long, DistrictProfile> m_Profiles = new Dictionary<long, DistrictProfile>();
+        private Unity.Entities.EntityQuery m_DistrictQuery;
 
-        private ElectionLedger m_Restored;
+        // Format: the save's format version. Districts: its district ids already mapped (v3+), or null to match by name.
+        private (Hash128 Source, ElectionLedger Ledger, int Format, DistrictRemap Districts)? m_Restore;
+        private Hash128 m_LoadedSource;
         private bool m_InGame;
         private GovernmentState m_LastGateState;
         private bool m_PendingPoll;
@@ -52,6 +70,9 @@ namespace ElectionAtlas.Systems
         private int m_CensusMonth = int.MinValue;
 
         public ElectionLedger Ledger { get; private set; } = new ElectionLedger();
+        public bool HasLoadedCity => m_InGame;
+        public string CityName => m_InGame ? m_CityConfiguration.cityName : null;
+        public string LoadedSaveName { get; private set; }
 
         /// <summary>Bumped whenever something the panel shows changes, so the UI only rebuilds then.</summary>
         public int DataVersion { get; private set; }
@@ -62,7 +83,7 @@ namespace ElectionAtlas.Systems
         public DistrictInfo[] LatestPollDistricts { get; private set; }
 
         /// <summary>Set when an election result comes in; the UI opens the panel and clears it.</summary>
-        public bool PendingResultNotice { get; set; }
+        internal ResultNotice PendingResultNotice { get; set; }
 
         /// <summary>Dev builds: months added to the game date, to test the schedule without waiting.</summary>
         public int DevMonthOffset { get; private set; }
@@ -82,6 +103,9 @@ namespace ElectionAtlas.Systems
         }
 
         public bool IsReading => m_Reader != null && m_Reader.InProgress;
+        public bool IsCountingElection => IsReading && m_PendingElection;
+        // The HUD clock uses elapsed simulation frames. The lighting clock can include a time-of-day offset.
+        internal uint CityClockTicks => m_Simulation.frameIndex - m_TimeDataQuery.GetSingleton<TimeData>().m_FirstFrame;
 
         public override int GetUpdateInterval(SystemUpdatePhase phase) => IsReading ? kReadInterval : kIdleInterval;
 
@@ -89,9 +113,20 @@ namespace ElectionAtlas.Systems
         {
             base.OnCreate();
             m_CityHall = World.GetOrCreateSystemManaged<CityHallSystem>();
+            m_CityConfiguration = World.GetOrCreateSystemManaged<CityConfigurationSystem>();
             m_Time = World.GetOrCreateSystemManaged<TimeSystem>();
+            m_Simulation = World.GetOrCreateSystemManaged<SimulationSystem>();
+            m_TimeDataQuery = GetEntityQuery(Unity.Entities.ComponentType.ReadOnly<TimeData>());
             m_Reader = new VoterReader(this);
+            m_DistrictQuery = EntityManager.CreateEntityQuery(new Unity.Entities.EntityQueryDesc
+            {
+                All = new[] { Unity.Entities.ComponentType.ReadOnly<District>() },
+                None = new[] { Unity.Entities.ComponentType.ReadOnly<Temp>(), Unity.Entities.ComponentType.ReadOnly<Deleted>() },
+            });
         }
+
+        /// <summary>The city's districts as entities (not ones being drawn or deleted).</summary>
+        public NativeArray<Entity> DistrictEntities(Allocator allocator) => m_DistrictQuery.ToEntityArray(allocator);
 
         protected override void OnDestroy()
         {
@@ -99,8 +134,14 @@ namespace ElectionAtlas.Systems
             base.OnDestroy();
         }
 
-        /// <summary>Called by ElectionStoreSystem while a save loads (null = no saved data).</summary>
-        public void RestoreFromSave(ElectionLedger ledger) => m_Restored = ledger;
+        /// <summary>
+        /// Stage a ledger for the save asset the game is reading. <paramref name="districts"/> is the mapping already
+        /// applied to its district ids (format v3+), or null when the save has none and districts are matched by name.
+        /// </summary>
+        public void RestoreFromSave(Context context, ElectionLedger ledger, int format, DistrictRemap districts)
+        {
+            m_Restore = ledger != null && context.purpose == Purpose.LoadGame ? (context.instigatorGuid, ledger, format, districts) : null;
+        }
 
         /// <summary>Called by ElectionStoreSystem when the game saves.</summary>
         public ElectionLedger LedgerForSave()
@@ -109,10 +150,14 @@ namespace ElectionAtlas.Systems
             return Ledger;
         }
 
-        protected override void OnGameLoadingComplete(Purpose purpose, GameMode mode)
+        protected override void OnGamePreload(Purpose purpose, GameMode mode)
         {
-            base.OnGameLoadingComplete(purpose, mode);
-            m_InGame = mode == GameMode.Game;
+            base.OnGamePreload(purpose, mode);
+            m_InGame = false;
+            m_Restore = null;
+            m_LoadedSource = Hash128.Empty;
+            LoadedSaveName = null;
+            Ledger = new ElectionLedger();
             m_Reader.Cancel();
             ClearCensus();
             m_Profiles.Clear();
@@ -120,18 +165,83 @@ namespace ElectionAtlas.Systems
             DevMonthOffset = 0;
             LatestPoll = null;
             LatestPollDistrictNames = null;
-            PendingResultNotice = false;
+            LatestPollDistricts = null;
+            PendingResultNotice = ResultNotice.None;
+            DataVersion++;
+        }
 
-            Ledger = m_Restored ?? new ElectionLedger();
-            if (m_Restored != null)
-                Mod.Log.Info($"Election data loaded: {Ledger.State}, {Ledger.Archive.Count} election(s), {Ledger.Polls.Count} poll(s), next {ElectionSchedule.Format(Ledger.NextElectionMonth)}");
-            m_Restored = null;
+        protected override void OnGameLoaded(Context context)
+        {
+            base.OnGameLoaded(context);
+            if (context.purpose == Purpose.LoadGame) m_LoadedSource = context.instigatorGuid;
+        }
+
+        protected override void OnGameLoadingComplete(Purpose purpose, GameMode mode)
+        {
+            base.OnGameLoadingComplete(purpose, mode);
+            m_InGame = mode == GameMode.Game;
+            bool loadedSave = m_InGame && purpose == Purpose.LoadGame && m_LoadedSource != Hash128.Empty;
+            var restore = m_Restore;
+            m_Restore = null;
+            bool restored = loadedSave && restore.HasValue && restore.Value.Source == m_LoadedSource;
+            if (restored)
+            {
+                Ledger = restore.Value.Ledger;
+                try
+                {
+                    LogDistrictRemap(restore.Value.Format, restore.Value.Districts ?? MatchDistrictsByName(Ledger));
+                }
+                catch (Exception e)
+                {
+                    // RemapDistricts swaps in the copies last, so a failure leaves the ledger as it was read.
+                    Mod.Log.Error(e, "District IDs couldn't be remapped; past elections may not line up with the map");
+                }
+            }
+            else if (restore.HasValue)
+                Mod.Log.Warn($"Election data for save asset {restore.Value.Source} was ignored while loading {m_LoadedSource} ({purpose})");
+
+            if (loadedSave &&
+                AssetDatabase.global.TryGetAsset(m_LoadedSource, out IAssetData asset) && asset is SaveGameMetadata save)
+                LoadedSaveName = save.name;
 
             m_CityHall.ResetForLoad(Ledger.State);
             m_LastGateState = Ledger.State;
             DataVersion++;
 
-            if (m_InGame) WarmUpModel();
+            if (!m_InGame) return;
+            string world = $"city '{CityName}', loaded save '{LoadedSaveName ?? "none"}' ({m_LoadedSource})";
+            if (restored)
+                Mod.Log.Info($"Election data loaded: {Ledger.State}, {Ledger.Archive.Count} election(s), {Ledger.Polls.Count} poll(s), next {ElectionSchedule.Format(Ledger.NextElectionMonth)}; {world}");
+            else
+                Mod.Log.Info($"No election history restored for {world}");
+            WarmUpModel();
+        }
+
+        /// <summary>
+        /// Saves before format v3 hold district ids from entities the game has since renumbered. Matches them to the
+        /// loaded districts by name (names unique on both sides only) and rewrites the ledger's ids; the next save
+        /// writes the v3 district table, so this only runs once per city.
+        /// </summary>
+        private DistrictRemap MatchDistrictsByName(ElectionLedger ledger)
+        {
+            DistrictInfo[] current;
+            using (var entities = DistrictEntities(Allocator.Temp))
+            {
+                current = new DistrictInfo[entities.Length];
+                for (int i = 0; i < current.Length; i++)
+                    current[i] = new DistrictInfo(DistrictKey.Of(entities[i]), m_Reader.DistrictName(entities[i]));
+            }
+
+            var remap = DistrictRemap.ByUniqueName(ledger, current);
+            ledger.RemapDistricts(remap);
+            return remap;
+        }
+
+        private static void LogDistrictRemap(int format, DistrictRemap remap)
+        {
+            string how = format >= 3 ? $"v{format} table" : $"v{format} save, name match";
+            string rest = remap.Unmatched > 0 ? $"; {remap.Unmatched} unmatched, kept as former districts" : "";
+            Mod.Log.Info($"District IDs remapped: {remap.Matched} of {remap.Total} ({how}){rest}");
         }
 
         /// <summary>
@@ -170,7 +280,7 @@ namespace ElectionAtlas.Systems
                 UpdateProfiles(districts);
                 if (m_PendingPoll || m_PendingElection)
                 {
-                    Process(table, districts, names, m_PendingMonth, m_PendingPoll, m_PendingElection, ReadNote("on the spot"));
+                    Process(table, districts, names, m_PendingMonth, m_PendingPoll, m_PendingElection, ReadNote("on the spot"), scheduled: true);
                     m_PendingPoll = m_PendingElection = false;
                 }
                 else
@@ -189,12 +299,7 @@ namespace ElectionAtlas.Systems
                 DataVersion++;
                 if (tick.RunPoll || tick.RunElection)
                 {
-                    if (m_Census != null && m_CensusMonth == now - 1)
-                    {
-                        Process(m_Census, m_CensusDistricts, m_CensusNames, now, tick.RunPoll, tick.RunElection, ReadNote("census from last month"));
-                        ClearCensus();
-                    }
-                    else
+                    if (!TryProcessCensus(now, tick.RunPoll, tick.RunElection, scheduled: true))
                     {
                         m_PendingPoll = tick.RunPoll;
                         m_PendingElection = tick.RunElection;
@@ -220,6 +325,16 @@ namespace ElectionAtlas.Systems
 
         private string ReadNote(string how) =>
             $"{m_ReadHouseholds:N0} households read in {m_ReadSlices} worker slices ({how})";
+
+        private bool TryProcessCensus(int month, bool poll, bool election, bool scheduled)
+        {
+            if (m_Census == null || m_CensusMonth != month - 1)
+                return false;
+
+            Process(m_Census, m_CensusDistricts, m_CensusNames, month, poll, election, ReadNote("census from last month"), scheduled);
+            ClearCensus();
+            return true;
+        }
 
         /// <summary>Refreshes district profiles from the reader's last land-use pass.</summary>
         private void UpdateProfiles(DistrictInfo[] districts)
@@ -264,7 +379,8 @@ namespace ElectionAtlas.Systems
         }
 
         /// <summary>Runs the poll and/or election on a finished read and records them.</summary>
-        private void Process(GroupTable table, DistrictInfo[] districts, string[] names, int month, bool poll, bool election, string readNote)
+        private void Process(GroupTable table, DistrictInfo[] districts, string[] names, int month, bool poll, bool election,
+            string readNote, bool scheduled)
         {
             if (table.TotalVoters == 0)
             {
@@ -290,7 +406,7 @@ namespace ElectionAtlas.Systems
                 Ledger.RecordElection(snapshot, month, Cadence);
                 m_CityHall.ApplyFoundingElection();
                 m_LastGateState = m_CityHall.State;
-                PendingResultNotice = true;
+                PendingResultNotice = scheduled ? ResultNotice.Scheduled : ResultNotice.Immediate;
 
                 Mod.Log.Info($"Election #{number} ({ElectionSchedule.Format(month)}): turnout {snapshot.Turnout:P1}, " +
                     string.Join(", ", snapshot.Parties.Select((p, i) => $"{p.Name} {snapshot.Share(i):P1}")) +
@@ -319,16 +435,22 @@ namespace ElectionAtlas.Systems
 
         // ---------------------------------------------------------------- on demand (dev commands, UI)
 
-        /// <summary>Reads the whole city now and holds an election (plus a poll). Works while paused.</summary>
-        public string RunElectionNow()
+        private void ReadAndProcessNow(int month, bool poll, bool election)
         {
-            m_Reader.Cancel();
             var sw = Stopwatch.StartNew();
             var table = m_Reader.ReadAll(out var districts, out var names);
             UpdateProfiles(districts);
+            Process(table, districts, names, month, poll, election, $"full read {sw.Elapsed.TotalMilliseconds:0.0} ms", scheduled: false);
+        }
+
+        /// <summary>Reads the whole city now and holds an election (plus a poll). Works while paused.</summary>
+        public string RunElectionNow()
+        {
+            var sw = Stopwatch.StartNew();
             int before = Ledger.Archive.Count;
             int now = NowMonth;
-            Process(table, districts, names, now, poll: true, election: true, readNote: $"full read {sw.Elapsed.TotalMilliseconds:0.0} ms");
+            ReadAndProcessNow(now, poll: true, election: true);
+            m_PendingPoll = m_PendingElection = false;
             var s = Ledger.Archive.Latest;
             if (Ledger.Archive.Count == before || s == null)
                 return "No election: there are no voting-age residents yet.";
@@ -340,11 +462,10 @@ namespace ElectionAtlas.Systems
         /// <summary>Reads the whole city now and runs a poll (recorded if it's a new month).</summary>
         public string RunPollNow()
         {
-            m_Reader.Cancel();
             var sw = Stopwatch.StartNew();
-            var table = m_Reader.ReadAll(out var districts, out var names);
-            UpdateProfiles(districts);
-            Process(table, districts, names, NowMonth, poll: true, election: false, readNote: $"full read {sw.Elapsed.TotalMilliseconds:0.0} ms");
+            ReadAndProcessNow(NowMonth, poll: true, election: false);
+            if (m_PendingElection) BeginRead(m_PendingMonth);
+            else m_PendingPoll = false;
             if (LatestPoll == null)
                 return "No poll: there are no voting-age residents yet.";
             var parties = CurrentParties();
@@ -355,25 +476,59 @@ namespace ElectionAtlas.Systems
 #if DEV_TOOLS
         public string DevAdvanceMonths(int months)
         {
-            DevMonthOffset += months;
-            DataVersion++;
-            return $"Advanced {months} month(s): the mod now sees {ElectionSchedule.Format(NowMonth)} (offset +{DevMonthOffset}). Unpause for the month tick to run.";
+            if (!m_InGame) return "Load a city first.";
+            SyncGate(NowMonth);
+            return AdvanceTestClock(months);
         }
 
         public string DevSkipToElection()
         {
-            int until = ElectionSchedule.MonthsUntil(NowMonth, Ledger.NextElectionMonth);
-            if (until < 0) return "No election is scheduled (is there a City Hall?).";
-            if (until == 0) return "An election is already due; unpause for the month tick to run it.";
-            return DevAdvanceMonths(until);
+            if (!m_InGame) return "Load a city first.";
+            int now = NowMonth;
+            SyncGate(now);
+            int until = ElectionSchedule.MonthsUntil(now, Ledger.NextElectionMonth);
+            if (until < 0 || !GovernmentGate.PollsRun(Ledger.State))
+                return "No election is scheduled (is there a City Hall?).";
+            return AdvanceTestClock(until);
+        }
+
+        /// <summary>Exercises the calendar immediately, including when the game's simulation is paused.</summary>
+        private string AdvanceTestClock(int months)
+        {
+            DevMonthOffset += months;
+            DataVersion++;
+            int now = NowMonth;
+            var tick = Ledger.OnMonth(now, m_CityHall.IsShutDown);
+            string date = $"Test date: {ElectionSchedule.Format(now)} (offset +{DevMonthOffset}).";
+            if (!GovernmentGate.PollsRun(Ledger.State)) return $"{date} Elections and polls are paused without a City Hall.";
+
+            // A previous simulation update may already have advanced the ledger to a due election.
+            bool election = tick.RunElection || m_PendingElection || ElectionSchedule.IsDue(now, Ledger.NextElectionMonth);
+            bool poll = tick.RunPoll || m_PendingPoll || election;
+            if (!poll) return date;
+
+            int before = Ledger.Archive.Count;
+            var previousPoll = LatestPoll;
+            m_PendingPoll = poll;
+            m_PendingElection = election;
+            m_PendingMonth = now;
+            if (TryProcessCensus(now, poll, election, scheduled: false)) m_Reader.Cancel();
+            else ReadAndProcessNow(now, poll, election);
+            m_PendingPoll = m_PendingElection = false;
+
+            if (Ledger.Archive.Count > before) return $"{date} Election #{Ledger.Archive.Latest.Number} held.";
+            if (!ReferenceEquals(LatestPoll, previousPoll)) return $"{date} Poll complete. Approval {LatestPoll.Approval:0.0}.";
+            return $"{date} There are no voting-age residents yet.";
         }
 
         public string DevReset()
         {
             m_Reader.Cancel();
             ClearCensus();
+            m_PendingPoll = m_PendingElection = false;
             var state = m_CityHall.State;
             Ledger = new ElectionLedger();
+            PendingResultNotice = ResultNotice.None;
             Ledger.OnGovernmentChanged(GovernmentState.NoCityHall, state == GovernmentState.Active || state == GovernmentState.Suspended ? GovernmentState.AwaitingFounding : state, NowMonth, Cadence);
             if (state != GovernmentState.NoCityHall) m_CityHall.DevSetState(GovernmentState.AwaitingFounding);
             m_LastGateState = m_CityHall.State;

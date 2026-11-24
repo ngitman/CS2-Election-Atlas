@@ -32,6 +32,18 @@ namespace ElectionAtlas
                 { m_Setting.GetOptionLabelLocaleID(nameof(Setting.PauseWithoutCityHall)), "Pause elections without a City Hall" },
                 { m_Setting.GetOptionDescLocaleID(nameof(Setting.PauseWithoutCityHall)), "Elections only run while the city has a City Hall. History is kept while paused." },
 
+                { m_Setting.GetOptionLabelLocaleID(nameof(Setting.ResultReveal)), "Election results" },
+                { m_Setting.GetOptionDescLocaleID(nameof(Setting.ResultReveal)), "Open final results or follow scheduled elections on the city clock. Past elections can be replayed from History." },
+                { m_Setting.GetEnumValueLocaleID(ResultReveal.AllAtOnce), "Show final results" },
+                { m_Setting.GetEnumValueLocaleID(ResultReveal.ElectionDay), "Watch Election Day" },
+
+                { m_Setting.GetOptionLabelLocaleID(nameof(Setting.ElectionDayPace)), "Election Day pace" },
+                { m_Setting.GetOptionDescLocaleID(nameof(Setting.ElectionDayPace)), "City clock: polls open at 7 AM and close at 7 PM in game time, and the count runs until midnight. Faster: each hour and each round of returns takes a few seconds, whatever the city's speed." },
+                { m_Setting.GetEnumValueLocaleID(ElectionDayPace.CityClock), "City clock" },
+                { m_Setting.GetEnumValueLocaleID(ElectionDayPace.Fast), "Faster" },
+                { m_Setting.GetOptionLabelLocaleID(nameof(Setting.ElectionNotifications)), "Election notifications" },
+                { m_Setting.GetOptionDescLocaleID(nameof(Setting.ElectionNotifications)), "During Election Day, show a button next to Chirper that opens the live count, and a notice when the polls close and when the results are in. With Show final results, only the results notice appears." },
+
                 { m_Setting.GetOptionLabelLocaleID(nameof(Setting.GoverningRule)), "Who governs" },
                 { m_Setting.GetOptionDescLocaleID(nameof(Setting.GoverningRule)), "Popular vote: the largest citywide share governs. Most districts: the party that wins the most districts governs; a tie goes to the popular vote." },
                 { m_Setting.GetEnumValueLocaleID(GoverningRule.PopularVote), "Popular vote" },

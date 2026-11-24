@@ -96,6 +96,10 @@
 
 	<Target Name="RunModPostProcessor" AfterTargets="ModPostProcessorConfig" BeforeTargets="DeployWIP" Condition="'$(HasModToolchain)' == 'true' And '$(NeedBuild)' == 'true'">
 		<Error Condition="!Exists('$(ModPostProcessorFullPath)')" Text="Post processor not found, please check the path: $(ModPostProcessorFullPath)" />
+		<!-- The toolchain enables native debug output by default. It embeds local build paths in Burst binaries. -->
+		<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+			<ModPostProcessorArgs>$([System.Text.RegularExpressions.Regex]::Replace('$(ModPostProcessorArgs)', ' -d(?= |$)', ''))</ModPostProcessorArgs>
+		</PropertyGroup>
 		<Message Text="Run post processor: $(ModPostProcessorArgs)" Importance="high" />
 		<Exec Command="$(ModPostProcessorArgs)" LogStandardErrorAsError="true" EnvironmentVariables="DOTNET_ROLL_FORWARD=Major" />
 	</Target>
@@ -109,5 +113,23 @@
 		<Warning Condition="!Exists('$(MSBuildProjectDirectory)\UI\node_modules')" Text="UI dependencies are missing, so the mod was deployed without its UI. Run 'npm install' in ElectionAtlas\UI, then build again." />
 		<Message Condition="Exists('$(MSBuildProjectDirectory)\UI\node_modules')" Text="Building UI into $(DeployDir)" Importance="high" />
 		<Exec Condition="Exists('$(MSBuildProjectDirectory)\UI\node_modules')" Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)\UI" EnvironmentVariables="CSII_USERDATAPATH=$(UserDataPath)" />
+	</Target>
+
+	<Target Name="CompleteReleasePayload" AfterTargets="BuildAndDeployUI" Condition="'$(Configuration)' == 'Release' And '$(NeedBuild)' == 'true' And '$(DeployDir)' != ''">
+		<!-- Unity's IL postprocessor reads the managed PDB during the build. Keep symbols in bin, outside the upload. -->
+		<Delete Files="$(DeployDir)\ElectionAtlas.pdb;$(DeployDir)\ElectionAtlas.Model.pdb;$(DeployDir)\ElectionAtlas_win_x86_64.pdb" />
+		<Copy SourceFiles="$(MSBuildProjectDirectory)\..\LICENSE" DestinationFolder="$(DeployDir)" />
+	</Target>
+
+	<!-- The official publisher uploads the whole content folder. Keep symbols, logs, saves and scratch files out. -->
+	<Target Name="ValidateReleasePayload" BeforeTargets="RunModPublisher">
+		<Error Condition="'$(Configuration)' != 'Release' Or '$(DevTools)' == 'true'" Text="Publish a Release build without developer tools." />
+		<Error Condition="'$(ContentFullPath)' == ''" Text="Build the Release mod before publishing." />
+		<ItemGroup>
+			<ReleasePayload Include="$(ContentFullPath)\ElectionAtlas.dll;$(ContentFullPath)\ElectionAtlas.Model.dll;$(ContentFullPath)\ElectionAtlas_win_x86_64.dll;$(ContentFullPath)\ElectionAtlas_mac_x86_64.bundle;$(ContentFullPath)\ElectionAtlas_linux_x86_64.so;$(ContentFullPath)\ElectionAtlas.mjs;$(ContentFullPath)\ElectionAtlas.css;$(ContentFullPath)\LICENSE" />
+			<ExtraReleasePayload Include="$(ContentFullPath)\**\*" Exclude="@(ReleasePayload)" />
+		</ItemGroup>
+		<Error Condition="!Exists('%(ReleasePayload.Identity)')" Text="The Release payload is missing %(ReleasePayload.Filename)%(ReleasePayload.Extension)." />
+		<Error Condition="'@(ExtraReleasePayload)' != ''" Text="Publish from a clean Release content folder containing only the mod binaries, UI and license." />
 	</Target>
 </Project>
