@@ -125,6 +125,13 @@ export interface ElectionDayReplay {
   wave: string[];
 }
 
+export interface ElectionNotice {
+  id: number;
+  results: boolean;
+  cityName: string | null;
+  governingParty: string | null;
+}
+
 export const panelOpen$ = bindValue<boolean>(GROUP, "panelOpen", false);
 export const citySession$ = bindValue<number>(GROUP, "citySession", 0);
 export const governmentState$ = bindValue<GovernmentState>(GROUP, "governmentState", "NoCityHall");
@@ -134,6 +141,7 @@ export const districts$ = bindValue<Districts | null>(GROUP, "districts", null);
 export const history$ = bindValue<History | null>(GROUP, "history", null);
 export const polls$ = bindValue<Polls | null>(GROUP, "polls", null);
 export const replay$ = bindValue<ElectionDayReplay | null>(GROUP, "replay", null);
+export const electionNotice$ = bindValue<ElectionNotice | null>(GROUP, "electionNotice", null);
 export const partyEditor$ = bindValue<PartyEditorState | null>(GROUP, "partyEditor", null);
 /** The panel is collapsed to the map legend and districts are colored by result. */
 export const mapView$ = bindValue<boolean>(GROUP, "mapView", false);

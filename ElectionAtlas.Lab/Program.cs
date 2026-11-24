@@ -33,6 +33,9 @@ namespace ElectionAtlas.Lab
   --incumbent ID       governing party id, e.g. left (default: nobody)
   --elections N        run N elections in a row, each incumbent the last winner (default 1)
   --seed N             seed for the first election (default 1)
+  --demographics       show the voter mix by district
+  --lean-weights FILE  compare the default lean with name=value overrides
+                      both runs use the same parties, incumbent, preset and seed
   --profiles FILE      compare elections with district-profile effects
                       use the export's # district indices, e.g. 0=UrbanCore
   --profile-strength S with --profiles: multiplies the lean offsets (default 1)
@@ -108,6 +111,8 @@ namespace ElectionAtlas.Lab
 
             var parties = SampleParties.Get(partyCount);
             var cfg = new ModelConfig();
+            string leanPath = Get(opts, "lean-weights", null);
+            var tuned = leanPath == null ? null : new ModelConfig { Lean = DemographicCalibration.ReadWeights(leanPath) };
             int outside = names[^1] == DistrictInfo.OutsideName ? names.Length - 1 : -1;
             string profilePath = Get(opts, "profiles", null);
             float strength = float.Parse(Get(opts, "profile-strength", "1"), CultureInfo.InvariantCulture);
@@ -116,6 +121,7 @@ namespace ElectionAtlas.Lab
             Console.WriteLine($"City: {Path.GetFileName(path)}{(source != null ? $" ({source})" : "")}");
             Console.WriteLine($"{table.TotalVoters:N0} voters in {table.Groups.Count:N0} groups, {table.DistrictCount} districts");
             Console.WriteLine($"Parties: {string.Join(", ", parties.Select(p => $"{p.Name} {p.Position}"))} · {preset} · {rule}");
+            if (opts.ContainsKey("demographics")) DemographicCalibration.PrintMix(table, names);
 
             var poll = ElectionModel.RunPoll(table, parties, incumbent, cfg);
             Console.WriteLine($"Poll before: approval {poll.Approval:0.0} · {string.Join(" · ", parties.Select((p, i) => $"{p.Name} {poll.Intention[i]:P1}"))}");
@@ -137,6 +143,11 @@ namespace ElectionAtlas.Lab
                     NightReport.Print(lastNight, $"election {e + 1}");
                 }
                 PrintElection(e + 1, result, parties, names);
+                if (tuned != null)
+                {
+                    var adjusted = ElectionModel.RunElection(table, parties, incumbent, rule, preset, tuned, result.Seed, outsideDistrict: outside);
+                    DemographicCalibration.PrintComparison(result, adjusted, parties, names);
+                }
                 if (experiment != null)
                 {
                     var adjusted = experiment.Run(result, parties, incumbent, rule, preset);
@@ -261,6 +272,7 @@ namespace ElectionAtlas.Lab
         private static readonly Dictionary<string, string> OptionalValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["day"] = "1",
+            ["demographics"] = "true",
         };
 
         private static string Get(Dictionary<string, string> opts, string key, string fallback) =>

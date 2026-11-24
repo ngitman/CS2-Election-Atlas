@@ -41,6 +41,8 @@ namespace ElectionAtlas
                 { m_Setting.GetOptionDescLocaleID(nameof(Setting.ElectionDayPace)), "City clock: polls open at 7 AM and close at 7 PM in game time, and the count runs until midnight. Faster: each hour and each round of returns takes a few seconds, whatever the city's speed." },
                 { m_Setting.GetEnumValueLocaleID(ElectionDayPace.CityClock), "City clock" },
                 { m_Setting.GetEnumValueLocaleID(ElectionDayPace.Fast), "Faster" },
+                { m_Setting.GetOptionLabelLocaleID(nameof(Setting.ElectionNotifications)), "Election notifications" },
+                { m_Setting.GetOptionDescLocaleID(nameof(Setting.ElectionNotifications)), "Show a popup when polls close and when the election results are ready." },
 
                 { m_Setting.GetOptionLabelLocaleID(nameof(Setting.GoverningRule)), "Who governs" },
                 { m_Setting.GetOptionDescLocaleID(nameof(Setting.GoverningRule)), "Popular vote: the largest citywide share governs. Most districts: the party that wins the most districts governs; a tie goes to the popular vote." },

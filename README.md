@@ -154,6 +154,8 @@ A folder argument uses its newest CSV. `--preset`, `--rule`, `--incumbent` and `
 
 Run `dotnet run --project ElectionAtlas.Lab -- --day-samples` to see voting hours and district returns for the built-in elections. Add `--day` to a city CSV run to preview its turnout and count.
 
+Add `--demographics` to inspect the voter mix by district. Use `--lean-weights FILE` to compare party shares with the same roster, turnout preset, incumbent, and seed. The file takes one `LeanWeights` field per line, such as `OfficeSocial=-0.2`. If you also pass `--profiles`, each experiment compares against the same defaults.
+
 ## Notes
 
 - `UI/types/cs2.d.ts` is a minimal hand-written shim for `cs2/modding`, `cs2/api` and `cs2/ui`, with prop names checked against the game's UI bundle (game 1.6.4). Swap it for the toolchain's typings once installed.

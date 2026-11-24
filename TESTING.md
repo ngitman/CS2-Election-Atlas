@@ -47,9 +47,17 @@ Use the same Debug build and save copies as above. If the build is already insta
 
 If a step fails, send the step number, save name, election number, and matching log lines from `Logs\ElectionAtlas.Mod.log`.
 
+## Election notifications
+
+1. Start a Debug build and load a test city with an archived election. In **Options → Election Atlas**, check that **Election notifications** is on. Open **Developer tools → Election notifications** and choose **Show polls-closed notice**. Close the Elections panel while the popup is visible, then choose **Watch**. The latest election's Election Day view should open.
+2. Choose **Show results notice** and check the governing party name. **View results** should open the **Districts** tab on that election. Preview it again and wait eight seconds to check that it disappears. Preview it once more and check **Dismiss**.
+3. Set **Election results** to **Watch Election Day** and use **Run election** in the developer window. **Skip to count** should show the polls-closed notice once. Close the panel and choose **Watch**. The view should return to counting, then **Final result** should show the results notice. On a scheduled city-clock day, verify the popup at 19:00 and the results notice at midnight. Replaying the archived election afterward should produce zero notices.
+4. Set **Election results** to **Show final results** and run another election. Only the results notice should appear. Turn **Election notifications** off while the popup is visible and check it closes. Both preview commands should respect the setting.
+5. With notifications back on, show a preview and switch saves. The popup should clear. For each notice shown, look for `[election day] notice: polls closed for election #` or `[election day] notice: results for election #` in `Logs\ElectionAtlas.Mod.log`.
+
 ## Release checks
 
 1. **Load the test copy with the mod disabled.** Close the game and move `Mods\ElectionAtlas` out of the game's user data folder, then load a save written by the mod. Check that the city opens and plays through a month. `Player.log` should contain one `Not serializable type: ElectionAtlas.Systems.ElectionStoreSystem` line and no exceptions. A Release build restores the mod folder.
-2. **Smoke-test the Release build.** The toolbar, editor, polls, elections, and map should work with the Developer drawer absent. Verify the publish metadata and the thumbnail referenced by `ElectionAtlas/Properties/PublishConfiguration.xml` before publishing.
+2. **Smoke-test the Release build.** Launch through Steam and load a named test copy with election history, such as **EA-A-clean-v3**. In **History**, choose **Watch Election Day**, then **Show map** and **Skip to count**. Check that districts fill in as they report and that the final count matches the archived result. Use **Back to results** and open **Parties** to confirm the editor loads and saves. Let a normal month pass and check that **Polls** adds an entry. Save under a new name, reload it, and confirm the election still replays. Developer tools should be absent. Verify the publish metadata and thumbnail before uploading.
 
 Send the step number and what you observed for any failed check. The game and mod logs are available under `%USERPROFILE%\AppData\LocalLow\Colossal Order\Cities Skylines II`.

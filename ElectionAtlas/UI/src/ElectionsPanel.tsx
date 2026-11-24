@@ -5,6 +5,7 @@ import { citySession$, districts$, GROUP, history$, mapView$, overview$, panelOp
 import { DevToggle, DevWindow } from "./DevSection";
 import { DistrictPopup } from "./DistrictPopup";
 import { DistrictsTab } from "./DistrictsTab";
+import { ElectionNoticePopup } from "./ElectionNoticePopup";
 import { GovernmentStrip } from "./GovernmentStrip";
 import { HistoryTab, PollsTab } from "./OtherTabs";
 import { PartiesTab } from "./PartiesTab";
@@ -58,7 +59,11 @@ const CityElectionsPanel = () => {
       </Scrollable>
     </>
   ), [overview, tab, districts, districtId, history, polls]);
-  if (!open) return null;
+  const notice = <ElectionNoticePopup onViewResults={() => {
+    setTab("districts");
+    setDistrictId(null);
+  }} />;
+  if (!open) return <>{notice}</>;
 
   const city = overview?.cityName;
   const save = overview?.loadedSaveName;
@@ -70,10 +75,11 @@ const CityElectionsPanel = () => {
     trigger(GROUP, "closeReplay");
     if (!replay?.sample) setTab("districts");
   };
-  if (mapView) return <MapLegend d={districts} cityContext={cityContext} replay={replay} onResults={replayResults} />;
+  if (mapView) return <>{notice}<MapLegend d={districts} cityContext={cityContext} replay={replay} onResults={replayResults} /></>;
 
   return (
     <>
+      {notice}
       <Panel draggable header={replay ? "Election Day" : "Elections"} initialPosition={{ x: 0.42, y: 0.25 }} onClose={() => trigger(GROUP, "closePanel")} style={{ width: replay ? "416rem" : "580rem" }}>
         <div className="ea-body">
           {cityContext ? <div className="ea-muted ea-small ea-ellipsis ea-city-context" title={cityContext}>{cityContext}</div> : null}

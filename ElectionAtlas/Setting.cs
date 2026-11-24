@@ -39,6 +39,9 @@ namespace ElectionAtlas
         [SettingsUISection(kSection, kScheduleGroup)]
         public ElectionDayPace ElectionDayPace { get; set; }
 
+        [SettingsUISection(kSection, kScheduleGroup)]
+        public bool ElectionNotifications { get; set; }
+
         [SettingsUISection(kSection, kRulesGroup)]
         public GoverningRule GoverningRule { get; set; }
 
@@ -96,6 +99,7 @@ namespace ElectionAtlas
             PauseWithoutCityHall = true;
             ResultReveal = ResultReveal.ElectionDay;
             ElectionDayPace = ElectionDayPace.CityClock;
+            ElectionNotifications = true;
             GoverningRule = GoverningRule.PopularVote;
             TurnoutPreset = TurnoutPreset.UsGeneral;
             PartyLineup = PartyLineup.TwoParties;

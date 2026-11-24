@@ -130,6 +130,16 @@ namespace ElectionAtlas.Systems
             w.TypeEnd();
         }
 
+        public static void ElectionNotice(this IJsonWriter w, int id, bool results, string cityName, string governingParty)
+        {
+            w.TypeBegin("ElectionAtlas.ElectionNotice");
+            w.Prop("id", id);
+            w.Prop("results", results);
+            w.Prop("cityName", cityName);
+            w.Prop("governingParty", governingParty);
+            w.TypeEnd();
+        }
+
         public static void ElectionDayReplay(this IJsonWriter w, ElectionNightPlayback play, bool sample)
         {
             var snapshot = play.Night.Snapshot;

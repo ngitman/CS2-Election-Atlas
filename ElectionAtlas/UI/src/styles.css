@@ -169,6 +169,27 @@
 .ea-btn--primary:hover { background-color: #3f8ce8; }
 .ea-btn--on { background-color: rgba(125, 180, 255, 0.35); }
 
+/* ---------- election notifications ---------- */
+
+.ea-notice {
+  position: absolute;
+  right: 24rem;
+  bottom: 108rem;
+  z-index: 10;
+  width: 320rem;
+  box-sizing: border-box;
+  padding: 12rem 14rem;
+  border-radius: 9rem;
+  border-left: 3rem solid #7db4ff;
+  background-color: rgba(23, 31, 43, 0.97);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 14rem;
+  pointer-events: auto;
+}
+.ea-notice__detail { margin-top: 4rem; color: rgba(255, 255, 255, 0.76); }
+.ea-notice__actions { display: flex; margin-top: 10rem; }
+.ea-notice__actions .ea-btn { margin-bottom: 0; }
+
 /* ---------- party editor ---------- */
 
 .ea-party-editor { display: flex; align-items: flex-start; }
@@ -227,6 +248,7 @@
 .ea-dev__group { margin: 10rem 0 4rem 0; font-size: 11rem; text-transform: uppercase; letter-spacing: 0.5rem; color: rgba(255, 255, 255, 0.45); }
 .ea-dev__grid { display: flex; flex-wrap: wrap; }
 .ea-dev__cell { width: 25%; height: 34rem; box-sizing: border-box; padding: 0 6rem 6rem 0; }
+.ea-dev__grid--wide .ea-dev__cell { width: 50%; }
 .ea-dev__cell .ea-btn {
   height: 100%; box-sizing: border-box; margin: 0; padding: 0 6rem;
   display: flex; align-items: center; justify-content: center;

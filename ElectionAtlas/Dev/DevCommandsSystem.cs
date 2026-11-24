@@ -56,6 +56,8 @@ namespace ElectionAtlas.Dev
             AddBinding(new TriggerBinding<string>(kGroup, "devSetGovernment", s => Run("set government", () => SetGovernment(s))));
             AddBinding(new TriggerBinding(kGroup, "devWatchLatest", () => Run("watch latest election", m_ElectionUI.DevWatchLatest)));
             AddBinding(new TriggerBinding(kGroup, "devWatchCityClock", () => Run("watch by city clock", m_ElectionUI.DevWatchCityClock)));
+            AddBinding(new TriggerBinding(kGroup, "devNoticePollsClosed", () => Run("preview polls-closed notice", () => m_ElectionUI.DevShowElectionNotice(false))));
+            AddBinding(new TriggerBinding(kGroup, "devNoticeResults", () => Run("preview results notice", () => m_ElectionUI.DevShowElectionNotice(true))));
             AddBinding(new TriggerBinding<string>(kGroup, "devWatchSample", s => Run("watch sample election", () => m_ElectionUI.DevWatchSample(s))));
             AddBinding(new TriggerBinding(kGroup, "devDayStep", () => Run("step Election Day", m_ElectionUI.DevStepReplay)));
             AddBinding(new TriggerBinding<string>(kGroup, "devDayPace", p => Run("set Election Day pace", () => m_ElectionUI.DevReplayPace(p))));

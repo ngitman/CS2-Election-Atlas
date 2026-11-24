@@ -27,10 +27,10 @@ const Cmd = ({ label, command, arg, on }: { label: string; command: string; arg?
   </div>
 );
 
-const Group = ({ title, children }: { title: string; children: React.ReactNode }) => (
+const Group = ({ title, children, wide = false }: { title: string; children: React.ReactNode; wide?: boolean }) => (
   <>
     <div className="ea-dev__group">{title}</div>
-    <div className="ea-dev__grid">{children}</div>
+    <div className={wide ? "ea-dev__grid ea-dev__grid--wide" : "ea-dev__grid"}>{children}</div>
   </>
 );
 
@@ -85,6 +85,10 @@ export const DevWindow = ({ replay, onClose }: { replay: boolean; onClose: () =>
             <Cmd label="Close race (most districts)" command="devWatchSample" arg="close-race-most-districts" />
             <Cmd label="Four parties" command="devWatchSample" arg="four-parties" />
             <Cmd label="Outside residents" command="devWatchSample" arg="outside-residents" />
+          </Group>
+          <Group title="Election notifications" wide>
+            <Cmd label="Show polls-closed notice" command="devNoticePollsClosed" />
+            <Cmd label="Show results notice" command="devNoticeResults" />
           </Group>
           {replay ? (
             <Group title="Replay controls">

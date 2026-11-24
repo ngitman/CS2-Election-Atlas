@@ -66,6 +66,7 @@ namespace ElectionAtlas.Systems
             var watch = System.Diagnostics.Stopwatch.StartNew();
 #endif
             if (waveSize <= 0) waveSize = ElectionNightPlayback.WaveSizeFor(ElectionNight.DistrictsWithVoters(snapshot));
+            if (m_NoticeElection != snapshot) m_NoticeElection = null;
             m_Replay = new ElectionNightPlayback(ElectionNight.ByDistrict(snapshot, waveSize), secondsPerFrame);
             m_ReplayArchiveIndex = index;
             m_LiveElectionDay = null;
@@ -87,6 +88,7 @@ namespace ElectionAtlas.Systems
 
         private void EndReplay()
         {
+            m_NoticeElection = null;
             if (m_Replay == null) return;
             m_Replay = null;
             m_ReplayArchiveIndex = -1;
@@ -154,6 +156,7 @@ namespace ElectionAtlas.Systems
         {
             m_ReplayBinding.Update();
             SyncDistrictSection();
+            ObserveReplayForNotice();
 #if DEV_TOOLS
             if (!frameChanged) return;
             var frame = m_Replay.Frame;
